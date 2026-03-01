@@ -24,9 +24,7 @@ class FakeCollectionItemRepository:
         self.deleted_ids: list[UUID] = []
 
     def get_items_by_collection_id(self, collection_id: UUID) -> list[CollectionItem]:
-        return [
-            item for item in self._items.values() if item.collection_id == collection_id
-        ]
+        return [item for item in self._items.values() if item.collection_id == collection_id]
 
     def get_item_by_id(self, item_id: UUID) -> CollectionItem | None:
         return self._items.get(item_id)

@@ -129,9 +129,7 @@ def test_create_collection_item_success(client: TestClient, db_session: Session)
 def test_delete_collection_item_success(client: TestClient, db_session: Session) -> None:
     ids = seed_baseline_data(db_session)
 
-    response = client.delete(
-        f'/api/v1/collections/{ids["collection_id"]}/items/{ids["item_id"]}'
-    )
+    response = client.delete(f'/api/v1/collections/{ids["collection_id"]}/items/{ids["item_id"]}')
 
     assert response.status_code == 204
 
@@ -146,9 +144,7 @@ def test_delete_collection_item_not_found_returns_404(
 ) -> None:
     ids = seed_baseline_data(db_session)
 
-    response = client.delete(
-        f'/api/v1/collections/{ids["collection_id"]}/items/{uuid4()}'
-    )
+    response = client.delete(f'/api/v1/collections/{ids["collection_id"]}/items/{uuid4()}')
 
     assert response.status_code == 404
     assert response.json()['error']['code'] == 'collection_item_not_found'

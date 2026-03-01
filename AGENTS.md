@@ -44,4 +44,5 @@
   - `uv run ruff check`
   - `uv run mypy src tests`
   - `uv run pytest -q`
+- Commit messages must follow Conventional Commits (enforced by `gitlint` in the `commit-msg` hook).
 - Pre-commit hooks must pass before push.

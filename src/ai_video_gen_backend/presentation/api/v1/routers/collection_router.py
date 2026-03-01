@@ -139,9 +139,7 @@ def upload_collection_item(
     session: Session = Depends(get_db_session),
     settings: Settings = Depends(get_app_settings),
     object_storage: ObjectStoragePort = Depends(get_object_storage),
-    video_thumbnail_generator: VideoThumbnailGeneratorPort = Depends(
-        get_video_thumbnail_generator
-    ),
+    video_thumbnail_generator: VideoThumbnailGeneratorPort = Depends(get_video_thumbnail_generator),
 ) -> CollectionItemResponse:
     if file is None:
         raise ApiError(

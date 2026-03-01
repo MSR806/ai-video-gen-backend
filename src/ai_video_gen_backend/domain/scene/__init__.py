@@ -1,4 +1,4 @@
-from .entities import Scene, SceneInput
+from .entities import Scene, SceneCreateInput, SceneUpdateInput
 from .ports import SceneRepositoryPort
 
-__all__ = ['Scene', 'SceneInput', 'SceneRepositoryPort']
+__all__ = ['Scene', 'SceneCreateInput', 'SceneRepositoryPort', 'SceneUpdateInput']

@@ -10,7 +10,7 @@ from .collection_item import (
     StoredObject,
 )
 from .project import Project, ProjectRepositoryPort, ProjectStatus
-from .scene import Scene, SceneInput, SceneRepositoryPort
+from .scene import Scene, SceneCreateInput, SceneRepositoryPort, SceneUpdateInput
 
 __all__ = [
     'Collection',
@@ -25,8 +25,9 @@ __all__ = [
     'ProjectRepositoryPort',
     'ProjectStatus',
     'Scene',
-    'SceneInput',
+    'SceneCreateInput',
     'SceneRepositoryPort',
+    'SceneUpdateInput',
     'StorageError',
     'StoredObject',
 ]

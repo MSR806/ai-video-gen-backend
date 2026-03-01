@@ -7,7 +7,12 @@ from .collection_item_schema import (
 from .collection_schema import CollectionResponse, CreateCollectionRequest
 from .error_schema import ErrorEnvelope
 from .project_schema import CreateProjectRequest, ProjectResponse
-from .scene_schema import SceneInputRequest, SceneResponse, SceneSyncRequest, SceneSyncResponse
+from .scene_schema import (
+    CreateSceneRequest,
+    SceneResponse,
+    SceneSyncResponse,
+    SceneUpdateRequest,
+)
 
 __all__ = [
     'CollectionItemResponse',
@@ -15,12 +20,12 @@ __all__ = [
     'CreateCollectionItemRequest',
     'CreateCollectionRequest',
     'CreateProjectRequest',
+    'CreateSceneRequest',
     'ErrorEnvelope',
     'GenerateCollectionItemRequest',
     'GeneratedCollectionItemResponse',
     'ProjectResponse',
-    'SceneInputRequest',
     'SceneResponse',
-    'SceneSyncRequest',
     'SceneSyncResponse',
+    'SceneUpdateRequest',
 ]

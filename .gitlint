@@ -1,0 +1,6 @@
+[general]
+contrib=CT1
+ignore=B5,B6
+
+[title-max-length]
+line-length=100

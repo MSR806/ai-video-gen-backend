@@ -13,13 +13,20 @@ from .collection_item import (
     UploadCollectionItemUseCase,
 )
 from .project import CreateProjectUseCase, GetAllProjectsUseCase, GetProjectByIdUseCase
-from .scene import GetProjectScenesUseCase, SyncScenesUseCase
+from .scene import (
+    CreateSceneUseCase,
+    DeleteSceneUseCase,
+    GetProjectScenesUseCase,
+    UpdateSceneUseCase,
+)
 
 __all__ = [
     'CreateCollectionItemUseCase',
     'CreateCollectionUseCase',
     'CreateProjectUseCase',
+    'CreateSceneUseCase',
     'DeleteCollectionItemUseCase',
+    'DeleteSceneUseCase',
     'GenerateCollectionItemUseCase',
     'GetAllProjectsUseCase',
     'GetCollectionByIdUseCase',
@@ -28,7 +35,7 @@ __all__ = [
     'GetProjectCollectionsUseCase',
     'GetProjectScenesUseCase',
     'PayloadTooLargeError',
-    'SyncScenesUseCase',
     'UnsupportedMediaTypeError',
+    'UpdateSceneUseCase',
     'UploadCollectionItemUseCase',
 ]

@@ -16,6 +16,7 @@ FastAPI + PostgreSQL backend for the AI video generation platform.
 ```bash
 uv sync --all-extras
 cp .env.example .env
+uv run pre-commit install --install-hooks --hook-type pre-commit --hook-type commit-msg
 ```
 
 For local (non-Docker) video uploads with thumbnails, `ffmpeg` must be installed and available in
@@ -49,6 +50,14 @@ uv run mypy src tests
 uv run pytest -q
 ```
 
+## Commit message format
+
+Conventional Commits are enforced via `gitlint` as a `commit-msg` hook.
+
+Valid examples:
+- `feat(scene): add screenplay sync endpoint`
+- `fix: handle empty upload payload`
+
 ## API
 Base path: `/api/v1`
 
@@ -62,6 +71,8 @@ Base path: `/api/v1`
 - `POST /api/v1/collections/{collection_id}/items/generate`
 - `DELETE /api/v1/collections/{collection_id}/items/{item_id}`
 - `GET /api/v1/projects/{project_id}/scenes`
-- `PUT /api/v1/projects/{project_id}/scenes`
+- `POST /api/v1/projects/{project_id}/scenes`
+- `PATCH /api/v1/projects/{project_id}/scenes/{scene_id}`
+- `DELETE /api/v1/projects/{project_id}/scenes/{scene_id}`
 - `GET /health/live`
 - `GET /health/ready`

@@ -1,4 +1,11 @@
+from .create_scene import CreateSceneUseCase
+from .delete_scene import DeleteSceneUseCase
 from .get_project_scenes import GetProjectScenesUseCase
-from .sync_scenes import SyncScenesUseCase
+from .update_scene import UpdateSceneUseCase
 
-__all__ = ['GetProjectScenesUseCase', 'SyncScenesUseCase']
+__all__ = [
+    'CreateSceneUseCase',
+    'DeleteSceneUseCase',
+    'GetProjectScenesUseCase',
+    'UpdateSceneUseCase',
+]

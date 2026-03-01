@@ -20,8 +20,16 @@ class Scene:
 
 
 @dataclass(frozen=True, slots=True)
-class SceneInput:
+class SceneCreateInput:
     id: UUID | None = None
+    position: int | None = None
     name: str | None = None
-    scene_number: int | None = None
     content: JsonObject | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SceneUpdateInput:
+    name: str | None = None
+    content: JsonObject | None = None
+    update_name: bool = False
+    update_content: bool = False
