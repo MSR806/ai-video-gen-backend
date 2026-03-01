@@ -1,0 +1,74 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ai-video-gen-backend"
+version = "0.1.0"
+description = "Backend API for AI video generation platform"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "AI Video Gen Team" }]
+dependencies = [
+  "alembic>=1.16.5",
+  "fastapi>=0.116.1",
+  "pydantic>=2.11.9",
+  "pydantic-settings>=2.10.1",
+  "psycopg[binary]>=3.2.10",
+  "sqlalchemy>=2.0.43",
+  "uvicorn[standard]>=0.35.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.28.1",
+  "mypy>=1.18.1",
+  "pre-commit>=4.3.0",
+  "pytest>=8.4.2",
+  "ruff>=0.13.2",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N", "C4", "SIM", "RUF", "S"]
+ignore = ["B008", "S105"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+strict = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+warn_return_any = true
+strict_equality = true
+show_error_codes = true
+pretty = true
+plugins = ["pydantic.mypy"]
+exclude = ["^alembic/"]
+
+[[tool.mypy.overrides]]
+module = ["alembic.*"]
+ignore_errors = true
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+filterwarnings = [
+  "error",
+  "ignore::DeprecationWarning:httpx.*",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ai_video_gen_backend"]
