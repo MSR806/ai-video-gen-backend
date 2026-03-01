@@ -18,6 +18,9 @@ uv sync --all-extras
 cp .env.example .env
 ```
 
+For local (non-Docker) video uploads with thumbnails, `ffmpeg` must be installed and available in
+your `PATH` (or configured via `VIDEO_THUMBNAIL_FFMPEG_BIN`).
+
 ## Run locally (without Docker)
 
 ```bash

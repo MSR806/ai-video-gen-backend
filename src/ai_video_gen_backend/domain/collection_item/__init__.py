@@ -16,6 +16,7 @@ from .entities import (
 )
 from .ports import CollectionItemRepositoryPort
 from .storage import ObjectStoragePort, StorageError, StoredObject
+from .thumbnail import VideoThumbnailGenerationError, VideoThumbnailGeneratorPort
 
 __all__ = [
     'AspectRatio',
@@ -36,4 +37,6 @@ __all__ = [
     'Resolution',
     'StorageError',
     'StoredObject',
+    'VideoThumbnailGenerationError',
+    'VideoThumbnailGeneratorPort',
 ]

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Iterable
 from contextlib import suppress
+from io import BytesIO
 from pathlib import Path
 from typing import BinaryIO
 from uuid import UUID, uuid4
@@ -14,7 +16,12 @@ from ai_video_gen_backend.domain.collection_item import (
     JsonObject,
     MediaType,
     ObjectStoragePort,
+    StorageError,
+    VideoThumbnailGenerationError,
+    VideoThumbnailGeneratorPort,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class UnsupportedMediaTypeError(Exception):
@@ -30,12 +37,14 @@ class UploadCollectionItemUseCase:
         self,
         collection_item_repository: CollectionItemRepositoryPort,
         object_storage: ObjectStoragePort,
+        video_thumbnail_generator: VideoThumbnailGeneratorPort,
         *,
         max_upload_size_bytes: int,
         allowed_mime_prefixes: Iterable[str],
     ) -> None:
         self._collection_item_repository = collection_item_repository
         self._object_storage = object_storage
+        self._video_thumbnail_generator = video_thumbnail_generator
         self._max_upload_size_bytes = max_upload_size_bytes
         self._allowed_mime_prefixes = tuple(allowed_mime_prefixes)
 
@@ -72,11 +81,20 @@ class UploadCollectionItemUseCase:
             body=file_stream,
             size_bytes=size_bytes,
         )
+        uploaded_object_keys = [stored_object.key]
+
+        thumbnail_url = self._resolve_thumbnail_url(
+            media_type=media_type,
+            original_object_key=stored_object.key,
+            original_object_url=stored_object.url,
+            file_stream=file_stream,
+            uploaded_object_keys=uploaded_object_keys,
+        )
 
         merged_metadata = self._merge_metadata(
             metadata=metadata,
             media_type=media_type,
-            url=stored_object.url,
+            thumbnail_url=thumbnail_url,
             size_bytes=size_bytes,
             content_type=content_type,
             filename=safe_filename,
@@ -105,8 +123,9 @@ class UploadCollectionItemUseCase:
         try:
             return self._collection_item_repository.create_item(payload)
         except Exception:
-            with suppress(Exception):
-                self._object_storage.delete_object(key=stored_object.key)
+            for uploaded_key in reversed(uploaded_object_keys):
+                with suppress(Exception):
+                    self._object_storage.delete_object(key=uploaded_key)
             raise
 
     def _is_allowed_content_type(self, content_type: str) -> bool:
@@ -131,12 +150,51 @@ class UploadCollectionItemUseCase:
     def _build_storage_key(self, *, project_id: UUID, collection_id: UUID, filename: str) -> str:
         return f'projects/{project_id}/collections/{collection_id}/{uuid4()}-{filename}'
 
+    def _build_thumbnail_key(self, *, original_object_key: str) -> str:
+        original_path = Path(original_object_key)
+        if len(original_path.suffix) > 0:
+            return f'{original_object_key[: -len(original_path.suffix)]}-thumb.jpg'
+        return f'{original_object_key}-thumb.jpg'
+
+    def _resolve_thumbnail_url(
+        self,
+        *,
+        media_type: MediaType,
+        original_object_key: str,
+        original_object_url: str,
+        file_stream: BinaryIO,
+        uploaded_object_keys: list[str],
+    ) -> str:
+        if media_type == 'image':
+            return original_object_url
+
+        try:
+            thumbnail_bytes = self._video_thumbnail_generator.extract_first_frame(
+                video_stream=file_stream
+            )
+            thumbnail_key = self._build_thumbnail_key(original_object_key=original_object_key)
+            thumbnail_object = self._object_storage.upload_object(
+                key=thumbnail_key,
+                content_type='image/jpeg',
+                body=BytesIO(thumbnail_bytes),
+                size_bytes=len(thumbnail_bytes),
+            )
+            uploaded_object_keys.append(thumbnail_object.key)
+            return thumbnail_object.url
+        except (StorageError, VideoThumbnailGenerationError) as exc:
+            logger.warning(
+                'Video thumbnail generation failed for %s: %s',
+                original_object_key,
+                str(exc),
+            )
+            return ''
+
     def _merge_metadata(
         self,
         *,
         metadata: JsonObject | None,
         media_type: MediaType,
-        url: str,
+        thumbnail_url: str,
         size_bytes: int,
         content_type: str,
         filename: str,
@@ -146,7 +204,7 @@ class UploadCollectionItemUseCase:
         if 'format' not in merged:
             merged['format'] = self._infer_format(content_type=content_type, filename=filename)
 
-        merged['thumbnailUrl'] = url
+        merged['thumbnailUrl'] = thumbnail_url
 
         if 'width' not in merged:
             merged['width'] = 0

@@ -18,6 +18,7 @@ from ai_video_gen_backend.domain.collection_item import (
     CollectionItemGenerationParams,
     GeneratedCollectionItem,
     StoredObject,
+    VideoThumbnailGenerationError,
 )
 
 
@@ -92,12 +93,26 @@ class FakeObjectStorage:
         self.deleted_keys.append(key)
 
 
-def test_upload_collection_item_happy_path_generates_storage_key_and_defaults() -> None:
+class FakeVideoThumbnailGenerator:
+    def __init__(self, *, fail: bool = False) -> None:
+        self.fail = fail
+
+    def extract_first_frame(self, *, video_stream: BinaryIO) -> bytes:
+        if self.fail:
+            raise VideoThumbnailGenerationError('thumbnail extraction failed')
+
+        video_stream.seek(0)
+        return b'jpeg-thumbnail'
+
+
+def test_upload_collection_item_video_happy_path_generates_thumbnail_and_defaults() -> None:
     repository = FakeCollectionItemRepository()
     object_storage = FakeObjectStorage()
+    thumbnail_generator = FakeVideoThumbnailGenerator()
     use_case = UploadCollectionItemUseCase(
         repository,
         object_storage,
+        thumbnail_generator,
         max_upload_size_bytes=1024,
         allowed_mime_prefixes=('image/', 'video/'),
     )
@@ -127,18 +142,85 @@ def test_upload_collection_item_happy_path_generates_storage_key_and_defaults() 
         f'projects/{project_id}/collections/{collection_id}/'
     )
     assert created_payload.url.startswith('https://storage.test/uploads/projects/')
-    assert created_payload.metadata['thumbnailUrl'] == created_payload.url
+    assert len(object_storage.uploaded) == 2
+    assert object_storage.uploaded[1].key.endswith('-thumb.jpg')
+    assert created_payload.metadata['thumbnailUrl'] == object_storage.uploaded[1].url
     assert created_payload.metadata['duration'] == 0
     assert created_payload.metadata['sizeBytes'] == 11
     assert result.storage_key == created_payload.storage_key
 
 
-def test_upload_collection_item_rejects_unsupported_mime_type() -> None:
+def test_upload_collection_item_image_thumbnail_uses_original_url() -> None:
     repository = FakeCollectionItemRepository()
     object_storage = FakeObjectStorage()
+    thumbnail_generator = FakeVideoThumbnailGenerator()
     use_case = UploadCollectionItemUseCase(
         repository,
         object_storage,
+        thumbnail_generator,
+        max_upload_size_bytes=1024,
+        allowed_mime_prefixes=('image/', 'video/'),
+    )
+
+    result = use_case.execute(
+        project_id=uuid4(),
+        collection_id=uuid4(),
+        filename='shot.png',
+        content_type='image/png',
+        file_stream=BytesIO(b'png'),
+        size_bytes=3,
+        name='Shot',
+        description='',
+        metadata=None,
+    )
+
+    assert repository.created_payload is not None
+    created_payload = repository.created_payload
+    assert created_payload.media_type == 'image'
+    assert len(object_storage.uploaded) == 1
+    assert created_payload.metadata['thumbnailUrl'] == created_payload.url
+    assert result.url == created_payload.url
+
+
+def test_upload_collection_item_video_thumbnail_failure_continues_with_empty_thumbnail() -> None:
+    repository = FakeCollectionItemRepository()
+    object_storage = FakeObjectStorage()
+    thumbnail_generator = FakeVideoThumbnailGenerator(fail=True)
+    use_case = UploadCollectionItemUseCase(
+        repository,
+        object_storage,
+        thumbnail_generator,
+        max_upload_size_bytes=1024,
+        allowed_mime_prefixes=('image/', 'video/'),
+    )
+
+    use_case.execute(
+        project_id=uuid4(),
+        collection_id=uuid4(),
+        filename='clip.mp4',
+        content_type='video/mp4',
+        file_stream=BytesIO(b'video'),
+        size_bytes=5,
+        name='Clip',
+        description='',
+        metadata=None,
+    )
+
+    assert repository.created_payload is not None
+    created_payload = repository.created_payload
+    assert created_payload.media_type == 'video'
+    assert len(object_storage.uploaded) == 1
+    assert created_payload.metadata['thumbnailUrl'] == ''
+
+
+def test_upload_collection_item_rejects_unsupported_mime_type() -> None:
+    repository = FakeCollectionItemRepository()
+    object_storage = FakeObjectStorage()
+    thumbnail_generator = FakeVideoThumbnailGenerator()
+    use_case = UploadCollectionItemUseCase(
+        repository,
+        object_storage,
+        thumbnail_generator,
         max_upload_size_bytes=1024,
         allowed_mime_prefixes=('image/', 'video/'),
     )
@@ -160,9 +242,11 @@ def test_upload_collection_item_rejects_unsupported_mime_type() -> None:
 def test_upload_collection_item_rejects_payload_larger_than_limit() -> None:
     repository = FakeCollectionItemRepository()
     object_storage = FakeObjectStorage()
+    thumbnail_generator = FakeVideoThumbnailGenerator()
     use_case = UploadCollectionItemUseCase(
         repository,
         object_storage,
+        thumbnail_generator,
         max_upload_size_bytes=5,
         allowed_mime_prefixes=('image/', 'video/'),
     )
@@ -184,9 +268,11 @@ def test_upload_collection_item_rejects_payload_larger_than_limit() -> None:
 def test_upload_collection_item_deletes_object_when_db_create_fails() -> None:
     repository = FakeCollectionItemRepository(fail_on_create=True)
     object_storage = FakeObjectStorage()
+    thumbnail_generator = FakeVideoThumbnailGenerator()
     use_case = UploadCollectionItemUseCase(
         repository,
         object_storage,
+        thumbnail_generator,
         max_upload_size_bytes=1024,
         allowed_mime_prefixes=('image/', 'video/'),
     )
@@ -195,14 +281,14 @@ def test_upload_collection_item_deletes_object_when_db_create_fails() -> None:
         use_case.execute(
             project_id=uuid4(),
             collection_id=uuid4(),
-            filename='shot.png',
-            content_type='image/png',
-            file_stream=BytesIO(b'png'),
-            size_bytes=3,
-            name='Shot',
+            filename='clip.mp4',
+            content_type='video/mp4',
+            file_stream=BytesIO(b'video'),
+            size_bytes=5,
+            name='Clip',
             description='',
             metadata=None,
         )
 
-    assert len(object_storage.uploaded) == 1
-    assert object_storage.deleted_keys == [object_storage.uploaded[0].key]
+    assert len(object_storage.uploaded) == 2
+    assert set(object_storage.deleted_keys) == {stored.key for stored in object_storage.uploaded}

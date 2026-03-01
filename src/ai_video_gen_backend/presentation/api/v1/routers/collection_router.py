@@ -25,6 +25,7 @@ from ai_video_gen_backend.domain.collection_item import (
     JsonObject,
     ObjectStoragePort,
     StorageError,
+    VideoThumbnailGeneratorPort,
 )
 from ai_video_gen_backend.infrastructure.repositories import (
     CollectionItemSqlRepository,
@@ -34,6 +35,7 @@ from ai_video_gen_backend.presentation.api.dependencies import (
     get_app_settings,
     get_db_session,
     get_object_storage,
+    get_video_thumbnail_generator,
 )
 from ai_video_gen_backend.presentation.api.errors import ApiError
 from ai_video_gen_backend.presentation.api.v1.schemas import (
@@ -136,6 +138,9 @@ def upload_collection_item(
     session: Session = Depends(get_db_session),
     settings: Settings = Depends(get_app_settings),
     object_storage: ObjectStoragePort = Depends(get_object_storage),
+    video_thumbnail_generator: VideoThumbnailGeneratorPort = Depends(
+        get_video_thumbnail_generator
+    ),
 ) -> CollectionItemResponse:
     if file is None:
         raise ApiError(
@@ -176,6 +181,7 @@ def upload_collection_item(
     upload_use_case = UploadCollectionItemUseCase(
         CollectionItemSqlRepository(session),
         object_storage,
+        video_thumbnail_generator,
         max_upload_size_bytes=settings.max_upload_size_mb * 1024 * 1024,
         allowed_mime_prefixes=settings.allowed_upload_mime_prefixes,
     )

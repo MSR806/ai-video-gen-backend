@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     storage_bucket: str = 'ai-video-gen-media'
     storage_region: str = 'us-east-1'
     storage_secure: bool = False
+    video_thumbnail_ffmpeg_bin: str = 'ffmpeg'
     max_upload_size_mb: int = 50
     allowed_upload_mime_prefixes: tuple[str, ...] = ('image/', 'video/')
 

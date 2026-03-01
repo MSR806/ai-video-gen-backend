@@ -6,9 +6,15 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from ai_video_gen_backend.config.settings import Settings, get_settings
-from ai_video_gen_backend.domain.collection_item import ObjectStoragePort
+from ai_video_gen_backend.domain.collection_item import (
+    ObjectStoragePort,
+    VideoThumbnailGeneratorPort,
+)
 from ai_video_gen_backend.infrastructure.db.session import get_session_factory
-from ai_video_gen_backend.infrastructure.storage import S3ObjectStorage
+from ai_video_gen_backend.infrastructure.storage import (
+    FfmpegVideoThumbnailGenerator,
+    S3ObjectStorage,
+)
 
 
 def get_db_session() -> Generator[Session, None, None]:
@@ -38,3 +44,9 @@ def get_object_storage(
         region=settings.storage_region,
         secure=settings.storage_secure,
     )
+
+
+def get_video_thumbnail_generator(
+    settings: Settings = Depends(get_app_settings),
+) -> VideoThumbnailGeneratorPort:
+    return FfmpegVideoThumbnailGenerator(ffmpeg_bin=settings.video_thumbnail_ffmpeg_bin)
