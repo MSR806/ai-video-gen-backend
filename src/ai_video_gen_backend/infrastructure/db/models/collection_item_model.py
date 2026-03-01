@@ -18,6 +18,9 @@ class CollectionItemModel(Base):
         sa.CheckConstraint(
             "media_type IN ('image', 'video')", name='ck_collection_items_media_type'
         ),
+        sa.CheckConstraint(
+            "status IN ('GENERATING', 'READY', 'FAILED')", name='ck_collection_items_status'
+        ),
         sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(
             ['collection_id', 'project_id'],
@@ -36,13 +39,20 @@ class CollectionItemModel(Base):
     media_type: Mapped[MediaType] = mapped_column(String(20), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    url: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    url: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     metadata_json: Mapped[dict[str, JsonValue]] = mapped_column(
         'metadata', JSONType, nullable=False
     )
     generation_source: Mapped[str] = mapped_column(
         String(50), nullable=False, server_default='upload'
     )
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default='READY',
+        server_default='READY',
+    )
+    generation_error_message: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     storage_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
     storage_bucket: Mapped[str | None] = mapped_column(String(255), nullable=True)
     storage_key: Mapped[str | None] = mapped_column(sa.Text, nullable=True)

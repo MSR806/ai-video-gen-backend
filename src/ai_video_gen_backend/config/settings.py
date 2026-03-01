@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     video_thumbnail_ffmpeg_bin: str = 'ffmpeg'
     max_upload_size_mb: int = 50
     allowed_upload_mime_prefixes: tuple[str, ...] = ('image/', 'video/')
+    fal_api_key: str = ''
+    generation_default_provider: str = 'fal'
+    generation_webhook_public_base_url: str = 'http://localhost:8000'
+    generation_webhook_token: str = ''
+    generation_status_reconcile_after_seconds: int = 20
+    generation_result_max_download_mb: int = 25
 
     model_config = SettingsConfigDict(
         env_file='.env',

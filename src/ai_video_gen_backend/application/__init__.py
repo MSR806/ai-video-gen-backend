@@ -6,11 +6,20 @@ from .collection import (
 from .collection_item import (
     CreateCollectionItemUseCase,
     DeleteCollectionItemUseCase,
-    GenerateCollectionItemUseCase,
     GetCollectionItemsUseCase,
     PayloadTooLargeError,
     UnsupportedMediaTypeError,
     UploadCollectionItemUseCase,
+)
+from .generation import (
+    GenerationFinalizationError,
+    GenerationFinalizer,
+    GetGenerationJobUseCase,
+    HandleFalWebhookUseCase,
+    InvalidGenerationRequestError,
+    ReconcileGenerationJobUseCase,
+    SubmitGenerationJobUseCase,
+    UnsupportedModelError,
 )
 from .project import CreateProjectUseCase, GetAllProjectsUseCase, GetProjectByIdUseCase
 from .scene import (
@@ -27,15 +36,22 @@ __all__ = [
     'CreateSceneUseCase',
     'DeleteCollectionItemUseCase',
     'DeleteSceneUseCase',
-    'GenerateCollectionItemUseCase',
+    'GenerationFinalizationError',
+    'GenerationFinalizer',
     'GetAllProjectsUseCase',
     'GetCollectionByIdUseCase',
     'GetCollectionItemsUseCase',
+    'GetGenerationJobUseCase',
     'GetProjectByIdUseCase',
     'GetProjectCollectionsUseCase',
     'GetProjectScenesUseCase',
+    'HandleFalWebhookUseCase',
+    'InvalidGenerationRequestError',
     'PayloadTooLargeError',
+    'ReconcileGenerationJobUseCase',
+    'SubmitGenerationJobUseCase',
     'UnsupportedMediaTypeError',
+    'UnsupportedModelError',
     'UpdateSceneUseCase',
     'UploadCollectionItemUseCase',
 ]

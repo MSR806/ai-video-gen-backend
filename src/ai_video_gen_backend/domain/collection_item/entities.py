@@ -9,7 +9,8 @@ JsonValue = object
 JsonObject = dict[str, JsonValue]
 
 MediaType = Literal['image', 'video']
-AspectRatio = Literal['square', 'portrait', 'landscape']
+CollectionItemStatus = Literal['GENERATING', 'READY', 'FAILED']
+AspectRatio = Literal['SQUARE', 'PORTRAIT', 'LANDSCAPE']
 Resolution = Literal['2k', '4k', '8k']
 BatchSize = Literal[1, 2, 3, 4]
 
@@ -49,11 +50,13 @@ class CollectionItem:
     project_id: UUID
     collection_id: UUID
     media_type: MediaType
+    status: CollectionItemStatus
     name: str
     description: str
-    url: str
+    url: str | None
     metadata: JsonObject
     generation_source: str
+    generation_error_message: str | None
     created_at: datetime
     updated_at: datetime
     storage_provider: str | None = None
@@ -70,9 +73,11 @@ class CollectionItemCreationPayload:
     media_type: MediaType
     name: str
     description: str
-    url: str
+    url: str | None
     metadata: JsonObject
     generation_source: str = 'upload'
+    status: CollectionItemStatus = 'READY'
+    generation_error_message: str | None = None
     storage_provider: str | None = None
     storage_bucket: str | None = None
     storage_key: str | None = None

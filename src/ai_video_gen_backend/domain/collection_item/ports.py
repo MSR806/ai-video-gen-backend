@@ -6,8 +6,6 @@ from uuid import UUID
 from .entities import (
     CollectionItem,
     CollectionItemCreationPayload,
-    CollectionItemGenerationParams,
-    GeneratedCollectionItem,
 )
 
 
@@ -19,5 +17,3 @@ class CollectionItemRepositoryPort(Protocol):
     def create_item(self, payload: CollectionItemCreationPayload) -> CollectionItem: ...
 
     def delete_item(self, item_id: UUID) -> bool: ...
-
-    def generate_item(self, params: CollectionItemGenerationParams) -> GeneratedCollectionItem: ...

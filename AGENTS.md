@@ -19,6 +19,10 @@
 - Never modify production tables manually.
 - Scene sync must be atomic per project (single transaction).
 
+## Dependency Assumptions
+- Required runtime dependencies are guaranteed by Docker image/build.
+- Do not add runtime import guards for required packages (for example wrapping `import fal_client` in try/except).
+
 ## API Contract Rules
 - All request models use strict validation (`extra=forbid`).
 - Error responses must follow the standard envelope:

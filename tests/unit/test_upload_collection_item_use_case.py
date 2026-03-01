@@ -45,11 +45,13 @@ class FakeCollectionItemRepository:
             project_id=payload.project_id,
             collection_id=payload.collection_id,
             media_type=payload.media_type,
+            status=payload.status,
             name=payload.name,
             description=payload.description,
             url=payload.url,
             metadata=payload.metadata,
             generation_source=payload.generation_source,
+            generation_error_message=payload.generation_error_message,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
             storage_provider=payload.storage_provider,
@@ -145,6 +147,7 @@ def test_upload_collection_item_video_happy_path_generates_thumbnail_and_default
     assert created_payload.storage_key.startswith(
         f'projects/{project_id}/collections/{collection_id}/'
     )
+    assert created_payload.url is not None
     assert created_payload.url.startswith('https://storage.test/uploads/projects/')
     assert len(object_storage.uploaded) == 2
     assert object_storage.uploaded[1].key.endswith('-thumb.jpg')

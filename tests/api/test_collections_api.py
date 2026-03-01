@@ -12,7 +12,15 @@ from ai_video_gen_backend.domain.collection_item import (
     StoredObject,
     VideoThumbnailGenerationError,
 )
+from ai_video_gen_backend.domain.generation import (
+    GenerationRequest,
+    ProviderResult,
+    ProviderStatus,
+    ProviderSubmission,
+    ProviderWebhookEvent,
+)
 from ai_video_gen_backend.presentation.api.dependencies import (
+    get_generation_provider,
     get_object_storage,
     get_video_thumbnail_generator,
 )
@@ -62,6 +70,64 @@ class FakeVideoThumbnailGenerator:
         return b'thumbnail-jpeg'
 
 
+class FakeGenerationProvider:
+    def __init__(self) -> None:
+        self._request_counter = 0
+        self._statuses: dict[str, ProviderStatus] = {}
+        self._results: dict[str, ProviderResult] = {}
+
+    def submit(self, request: GenerationRequest, *, webhook_url: str) -> ProviderSubmission:
+        del request, webhook_url
+        self._request_counter += 1
+        request_id = f'req-{self._request_counter}'
+        self._statuses[request_id] = ProviderStatus(status='IN_PROGRESS')
+        self._results[request_id] = ProviderResult(
+            status='FAILED',
+            output_url=None,
+            raw_response={'status': 'ERROR'},
+            error_message='not-ready',
+        )
+        return ProviderSubmission(provider_request_id=request_id)
+
+    def status(self, *, endpoint_id: str, provider_request_id: str) -> ProviderStatus:
+        del endpoint_id
+        return self._statuses.get(provider_request_id, ProviderStatus(status='FAILED'))
+
+    def result(
+        self,
+        *,
+        endpoint_id: str,
+        provider_request_id: str,
+        model_key: str | None = None,
+    ) -> ProviderResult:
+        del endpoint_id, model_key
+        return self._results[provider_request_id]
+
+    def cancel(self, *, endpoint_id: str, provider_request_id: str) -> None:
+        del endpoint_id
+        self._statuses[provider_request_id] = ProviderStatus(status='CANCELLED')
+
+    def parse_webhook(self, payload: dict[str, object]) -> ProviderWebhookEvent | None:
+        request_id = payload.get('request_id')
+        status = payload.get('status')
+        if not isinstance(request_id, str) or not isinstance(status, str):
+            return None
+        if status.upper() == 'OK':
+            return ProviderWebhookEvent(
+                provider_request_id=request_id,
+                status='SUCCEEDED',
+                output_url='https://example.com/generated.png',
+                raw_response=payload,
+            )
+        return ProviderWebhookEvent(
+            provider_request_id=request_id,
+            status='FAILED',
+            output_url=None,
+            raw_response=payload,
+            error_message='provider error',
+        )
+
+
 def _override_upload_dependencies(
     client: TestClient,
     storage: FakeObjectStorage,
@@ -71,6 +137,15 @@ def _override_upload_dependencies(
     app.dependency_overrides[get_object_storage] = lambda: storage
     if thumbnail_generator is not None:
         app.dependency_overrides[get_video_thumbnail_generator] = lambda: thumbnail_generator
+    return app
+
+
+def _override_generation_dependency(
+    client: TestClient,
+    provider: FakeGenerationProvider,
+) -> FastAPI:
+    app = cast(FastAPI, client.app)
+    app.dependency_overrides[get_generation_provider] = lambda: provider
     return app
 
 
@@ -208,25 +283,103 @@ def test_delete_collection_item_storage_failure_returns_502(
     assert any(item['id'] == item_id for item in items_response.json())
 
 
-def test_generate_collection_item_stub(client: TestClient, db_session: Session) -> None:
+def test_generate_collection_item_returns_async_job(
+    client: TestClient, db_session: Session
+) -> None:
     ids = seed_baseline_data(db_session)
+    fake_provider = FakeGenerationProvider()
+    app = _override_generation_dependency(client, fake_provider)
 
-    response = client.post(
-        f'/api/v1/collections/{ids["collection_id"]}/items/generate',
-        json={
-            'prompt': 'cinematic wide shot',
-            'aspectRatio': 'landscape',
-            'mediaType': 'video',
-            'projectId': str(ids['project_id']),
-            'resolution': '2k',
-            'batchSize': 1,
-        },
-    )
+    try:
+        response = client.post(
+            f'/api/v1/collections/{ids["collection_id"]}/items/generate',
+            json={
+                'projectId': str(ids['project_id']),
+                'operation': 'TEXT_TO_IMAGE',
+                'prompt': 'cinematic wide shot',
+                'aspectRatio': 'LANDSCAPE',
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_generation_provider, None)
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     payload = response.json()
-    assert payload['format'] == 'mp4'
-    assert payload['duration'] == 10
+    assert payload['jobId']
+    assert payload['itemId']
+    assert payload['status'] in {'QUEUED', 'IN_PROGRESS'}
+
+
+def test_get_generation_job_returns_404_when_missing(client: TestClient) -> None:
+    response = client.get('/api/v1/generation-jobs/00000000-0000-0000-0000-000000000000')
+
+    assert response.status_code == 404
+    assert response.json()['error']['code'] == 'generation_job_not_found'
+
+
+def test_generation_webhook_invalid_token_returns_401(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+    fake_provider = FakeGenerationProvider()
+    app = _override_generation_dependency(client, fake_provider)
+
+    try:
+        submit = client.post(
+            f'/api/v1/collections/{ids["collection_id"]}/items/generate',
+            json={
+                'projectId': str(ids['project_id']),
+                'operation': 'TEXT_TO_IMAGE',
+                'prompt': 'sunset',
+            },
+        )
+        assert submit.status_code == 202
+        response = client.post(
+            '/api/v1/provider-webhooks/fal?token=invalid',
+            json={'request_id': 'req-1', 'status': 'ERROR'},
+        )
+    finally:
+        app.dependency_overrides.pop(get_generation_provider, None)
+
+    assert response.status_code == 401
+    assert response.json()['error']['code'] == 'unauthorized_webhook'
+
+
+def test_generation_webhook_failure_marks_placeholder_item_failed(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+    fake_provider = FakeGenerationProvider()
+    app = _override_generation_dependency(client, fake_provider)
+
+    try:
+        submit = client.post(
+            f'/api/v1/collections/{ids["collection_id"]}/items/generate',
+            json={
+                'projectId': str(ids['project_id']),
+                'operation': 'TEXT_TO_IMAGE',
+                'prompt': 'sunset',
+            },
+        )
+        assert submit.status_code == 202
+        item_id = submit.json()['itemId']
+
+        webhook = client.post(
+            '/api/v1/provider-webhooks/fal?token=',
+            json={'request_id': 'req-1', 'status': 'ERROR'},
+        )
+    finally:
+        app.dependency_overrides.pop(get_generation_provider, None)
+
+    assert webhook.status_code == 200
+    assert webhook.json()['handled'] is True
+
+    items_response = client.get(f'/api/v1/collections/{ids["collection_id"]}/items')
+    assert items_response.status_code == 200
+    generated_item = next(item for item in items_response.json() if item['id'] == item_id)
+    assert generated_item['status'] == 'FAILED'
 
 
 def test_create_collection_item_project_mismatch_returns_400(

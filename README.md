@@ -19,6 +19,8 @@ cp .env.example .env
 uv run pre-commit install --install-hooks --hook-type pre-commit --hook-type commit-msg
 ```
 
+Generation uses `fal-client` and requires `FAL_API_KEY` in `.env`.
+
 For local (non-Docker) video uploads with thumbnails, `ffmpeg` must be installed and available in
 your `PATH` (or configured via `VIDEO_THUMBNAIL_FFMPEG_BIN`).
 
@@ -69,6 +71,8 @@ Base path: `/api/v1`
 - `POST /api/v1/collections/{collection_id}/items`
 - `POST /api/v1/collections/{collection_id}/items/upload`
 - `POST /api/v1/collections/{collection_id}/items/generate`
+- `GET /api/v1/generation-jobs/{job_id}`
+- `POST /api/v1/provider-webhooks/fal`
 - `DELETE /api/v1/collections/{collection_id}/items/{item_id}`
 - `GET /api/v1/projects/{project_id}/scenes`
 - `POST /api/v1/projects/{project_id}/scenes`
@@ -76,3 +80,6 @@ Base path: `/api/v1`
 - `DELETE /api/v1/projects/{project_id}/scenes/{scene_id}`
 - `GET /health/live`
 - `GET /health/ready`
+
+`POST /api/v1/collections/{collection_id}/items/generate` is asynchronous and returns `202` with
+`jobId` and `itemId`. Use `GET /api/v1/generation-jobs/{job_id}` to track status.

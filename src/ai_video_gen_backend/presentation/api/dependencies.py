@@ -10,7 +10,9 @@ from ai_video_gen_backend.domain.collection_item import (
     ObjectStoragePort,
     VideoThumbnailGeneratorPort,
 )
+from ai_video_gen_backend.domain.generation import GenerationProviderPort
 from ai_video_gen_backend.infrastructure.db.session import get_session_factory
+from ai_video_gen_backend.infrastructure.providers import FalGenerationProvider
 from ai_video_gen_backend.infrastructure.storage import (
     FfmpegVideoThumbnailGenerator,
     S3ObjectStorage,
@@ -50,3 +52,9 @@ def get_video_thumbnail_generator(
     settings: Settings = Depends(get_app_settings),
 ) -> VideoThumbnailGeneratorPort:
     return FfmpegVideoThumbnailGenerator(ffmpeg_bin=settings.video_thumbnail_ffmpeg_bin)
+
+
+def get_generation_provider(
+    settings: Settings = Depends(get_app_settings),
+) -> GenerationProviderPort:
+    return FalGenerationProvider(api_key=settings.fal_api_key)

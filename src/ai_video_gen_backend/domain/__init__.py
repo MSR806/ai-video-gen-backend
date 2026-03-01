@@ -4,10 +4,19 @@ from .collection_item import (
     CollectionItemCreationPayload,
     CollectionItemGenerationParams,
     CollectionItemRepositoryPort,
+    CollectionItemStatus,
     GeneratedCollectionItem,
     ObjectStoragePort,
     StorageError,
     StoredObject,
+)
+from .generation import (
+    GenerationJob,
+    GenerationJobRepositoryPort,
+    GenerationOperation,
+    GenerationProviderPort,
+    GenerationRequest,
+    GenerationStatus,
 )
 from .project import Project, ProjectRepositoryPort, ProjectStatus
 from .scene import Scene, SceneCreateInput, SceneRepositoryPort, SceneUpdateInput
@@ -18,8 +27,15 @@ __all__ = [
     'CollectionItemCreationPayload',
     'CollectionItemGenerationParams',
     'CollectionItemRepositoryPort',
+    'CollectionItemStatus',
     'CollectionRepositoryPort',
     'GeneratedCollectionItem',
+    'GenerationJob',
+    'GenerationJobRepositoryPort',
+    'GenerationOperation',
+    'GenerationProviderPort',
+    'GenerationRequest',
+    'GenerationStatus',
     'ObjectStoragePort',
     'Project',
     'ProjectRepositoryPort',

@@ -13,28 +13,34 @@ from ai_video_gen_backend.application.collection import GetCollectionByIdUseCase
 from ai_video_gen_backend.application.collection_item import (
     CreateCollectionItemUseCase,
     DeleteCollectionItemUseCase,
-    GenerateCollectionItemUseCase,
     GetCollectionItemsUseCase,
     PayloadTooLargeError,
     UnsupportedMediaTypeError,
     UploadCollectionItemUseCase,
 )
+from ai_video_gen_backend.application.generation import (
+    InvalidGenerationRequestError,
+    SubmitGenerationJobUseCase,
+    UnsupportedModelError,
+)
 from ai_video_gen_backend.config.settings import Settings
 from ai_video_gen_backend.domain.collection_item import (
     CollectionItemCreationPayload,
-    CollectionItemGenerationParams,
     JsonObject,
     ObjectStoragePort,
     StorageError,
     VideoThumbnailGeneratorPort,
 )
+from ai_video_gen_backend.domain.generation import GenerationProviderPort, GenerationRequest
 from ai_video_gen_backend.infrastructure.repositories import (
     CollectionItemSqlRepository,
     CollectionSqlRepository,
+    GenerationJobSqlRepository,
 )
 from ai_video_gen_backend.presentation.api.dependencies import (
     get_app_settings,
     get_db_session,
+    get_generation_provider,
     get_object_storage,
     get_video_thumbnail_generator,
 )
@@ -44,7 +50,7 @@ from ai_video_gen_backend.presentation.api.v1.schemas import (
     CollectionResponse,
     CreateCollectionItemRequest,
     GenerateCollectionItemRequest,
-    GeneratedCollectionItemResponse,
+    SubmitGenerationResponse,
 )
 
 router = APIRouter(tags=['collections'])
@@ -260,13 +266,16 @@ def delete_collection_item(
 
 @router.post(
     '/collections/{collection_id}/items/generate',
-    response_model=GeneratedCollectionItemResponse,
+    response_model=SubmitGenerationResponse,
+    status_code=202,
 )
 def generate_collection_item(
     collection_id: UUID,
     request: GenerateCollectionItemRequest,
+    settings: Settings = Depends(get_app_settings),
     session: Session = Depends(get_db_session),
-) -> GeneratedCollectionItemResponse:
+    generation_provider: GenerationProviderPort = Depends(get_generation_provider),
+) -> SubmitGenerationResponse:
     collection_use_case = GetCollectionByIdUseCase(CollectionSqlRepository(session))
     collection = collection_use_case.execute(collection_id)
     if collection is None:
@@ -279,20 +288,48 @@ def generate_collection_item(
             message='Collection does not belong to projectId in payload',
         )
 
-    use_case = GenerateCollectionItemUseCase(CollectionItemSqlRepository(session))
-    params = CollectionItemGenerationParams(
-        prompt=request.prompt,
-        aspect_ratio=request.aspect_ratio,
-        media_type=request.media_type,
-        project_id=request.project_id,
-        collection_id=collection_id,
-        reference_images=request.reference_images,
-        camera_setup=request.camera_setup.to_domain() if request.camera_setup is not None else None,
-        resolution=request.resolution,
-        batch_size=request.batch_size,
+    use_case = SubmitGenerationJobUseCase(
+        collection_item_repository=CollectionItemSqlRepository(session),
+        generation_job_repository=GenerationJobSqlRepository(session),
+        generation_provider=generation_provider,
+        webhook_url=_build_generation_webhook_url(settings),
     )
-    generated = use_case.execute(params)
-    return GeneratedCollectionItemResponse.from_domain(generated)
+    try:
+        job_id, item_id, status = use_case.execute(
+            GenerationRequest(
+                project_id=request.project_id,
+                collection_id=collection_id,
+                operation=request.operation,
+                prompt=request.prompt,
+                source_image_urls=request.source_image_urls,
+                model_key=request.model_key,
+                aspect_ratio=request.aspect_ratio,
+                seed=request.seed,
+                idempotency_key=request.idempotency_key,
+            )
+        )
+    except UnsupportedModelError as exc:
+        raise ApiError(
+            status_code=400,
+            code='unsupported_model',
+            message='Unsupported or disabled model key',
+        ) from exc
+    except InvalidGenerationRequestError as exc:
+        raise ApiError(
+            status_code=400,
+            code='validation_error',
+            message='Request validation failed',
+            details={'errors': [{'loc': ['body'], 'msg': str(exc)}]},
+        ) from exc
+    except Exception as exc:
+        raise ApiError(
+            status_code=502,
+            code='generation_submit_failed',
+            message='Failed to submit generation request',
+            details={'reason': str(exc.__class__.__name__)},
+        ) from exc
+
+    return SubmitGenerationResponse(job_id=job_id, item_id=item_id, status=status)
 
 
 def _parse_upload_metadata(metadata_raw: str | None) -> JsonObject | None:
@@ -337,3 +374,11 @@ def _file_size(file: UploadFile) -> int:
     size = file.file.tell()
     file.file.seek(current, os.SEEK_SET)
     return size
+
+
+def _build_generation_webhook_url(settings: Settings) -> str:
+    base = settings.generation_webhook_public_base_url.rstrip('/')
+    prefix = settings.api_v1_prefix
+    if not prefix.startswith('/'):
+        prefix = f'/{prefix}'
+    return f'{base}{prefix}/provider-webhooks/fal?token={settings.generation_webhook_token}'
