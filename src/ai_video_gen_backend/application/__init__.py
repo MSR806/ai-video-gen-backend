@@ -5,6 +5,7 @@ from .collection import (
 )
 from .collection_item import (
     CreateCollectionItemUseCase,
+    DeleteCollectionItemUseCase,
     GenerateCollectionItemUseCase,
     GetCollectionItemsUseCase,
     PayloadTooLargeError,
@@ -18,6 +19,7 @@ __all__ = [
     'CreateCollectionItemUseCase',
     'CreateCollectionUseCase',
     'CreateProjectUseCase',
+    'DeleteCollectionItemUseCase',
     'GenerateCollectionItemUseCase',
     'GetAllProjectsUseCase',
     'GetCollectionByIdUseCase',

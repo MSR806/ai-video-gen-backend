@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from ai_video_gen_backend.application.collection import GetCollectionByIdUseCase
 from ai_video_gen_backend.application.collection_item import (
     CreateCollectionItemUseCase,
+    DeleteCollectionItemUseCase,
     GenerateCollectionItemUseCase,
     GetCollectionItemsUseCase,
     PayloadTooLargeError,
@@ -228,6 +229,35 @@ def upload_collection_item(
             file.file.close()
 
     return CollectionItemResponse.from_domain(item)
+
+
+@router.delete('/collections/{collection_id}/items/{item_id}', status_code=204)
+def delete_collection_item(
+    collection_id: UUID,
+    item_id: UUID,
+    session: Session = Depends(get_db_session),
+    object_storage: ObjectStoragePort = Depends(get_object_storage),
+) -> None:
+    collection_use_case = GetCollectionByIdUseCase(CollectionSqlRepository(session))
+    if collection_use_case.execute(collection_id) is None:
+        raise ApiError(status_code=404, code='collection_not_found', message='Collection not found')
+
+    use_case = DeleteCollectionItemUseCase(CollectionItemSqlRepository(session), object_storage)
+    try:
+        deleted = use_case.execute(collection_id=collection_id, item_id=item_id)
+    except StorageError as exc:
+        raise ApiError(
+            status_code=502,
+            code='storage_delete_failed',
+            message='Failed to delete object from storage',
+        ) from exc
+
+    if not deleted:
+        raise ApiError(
+            status_code=404,
+            code='collection_item_not_found',
+            message='Collection item not found',
+        )
 
 
 @router.post(

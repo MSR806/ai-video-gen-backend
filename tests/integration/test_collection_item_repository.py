@@ -58,3 +58,48 @@ def test_collection_item_repository_maps_storage_fields(db_session: Session) -> 
     assert fetched.storage_key == 'projects/p/collections/c/key.jpg'
     assert fetched.mime_type == 'image/jpeg'
     assert fetched.size_bytes == 1234
+
+
+def test_collection_item_repository_delete_item_removes_record(db_session: Session) -> None:
+    project_id = uuid4()
+    collection_id = uuid4()
+
+    db_session.add(
+        ProjectModel(
+            id=project_id,
+            name='Project',
+            description='Project for delete mapping',
+            status='draft',
+        )
+    )
+    db_session.add(
+        CollectionModel(
+            id=collection_id,
+            project_id=project_id,
+            name='Collection',
+            tag='ref',
+            description='Collection for delete mapping',
+        )
+    )
+    db_session.commit()
+
+    repository = CollectionItemSqlRepository(db_session)
+    created = repository.create_item(
+        CollectionItemCreationPayload(
+            project_id=project_id,
+            collection_id=collection_id,
+            media_type='image',
+            name='Delete Me',
+            description='Delete candidate',
+            url='http://localhost:9000/ai-video-gen-media/delete.jpg',
+            metadata={'width': 100, 'height': 100, 'format': 'jpg', 'thumbnailUrl': ''},
+            generation_source='upload',
+        )
+    )
+
+    deleted = repository.delete_item(created.id)
+    missing = repository.get_item_by_id(created.id)
+
+    assert deleted is True
+    assert missing is None
+    assert repository.delete_item(uuid4()) is False

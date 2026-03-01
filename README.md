@@ -60,6 +60,7 @@ Base path: `/api/v1`
 - `POST /api/v1/collections/{collection_id}/items`
 - `POST /api/v1/collections/{collection_id}/items/upload`
 - `POST /api/v1/collections/{collection_id}/items/generate`
+- `DELETE /api/v1/collections/{collection_id}/items/{item_id}`
 - `GET /api/v1/projects/{project_id}/scenes`
 - `PUT /api/v1/projects/{project_id}/scenes`
 - `GET /health/live`

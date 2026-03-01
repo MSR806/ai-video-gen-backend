@@ -59,6 +59,10 @@ class FakeCollectionItemRepository:
             size_bytes=payload.size_bytes,
         )
 
+    def delete_item(self, item_id: UUID) -> bool:
+        del item_id
+        return False
+
     def generate_item(self, params: CollectionItemGenerationParams) -> GeneratedCollectionItem:
         del params
         raise NotImplementedError

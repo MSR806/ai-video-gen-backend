@@ -56,6 +56,15 @@ class CollectionItemSqlRepository:
         self._session.refresh(model)
         return self._to_domain(model)
 
+    def delete_item(self, item_id: UUID) -> bool:
+        model = self._session.get(CollectionItemModel, item_id)
+        if model is None:
+            return False
+
+        self._session.delete(model)
+        self._session.commit()
+        return True
+
     def generate_item(self, params: CollectionItemGenerationParams) -> GeneratedCollectionItem:
         resolution = params.resolution or '2k'
         width, height = self._dimensions(params.aspect_ratio, resolution)

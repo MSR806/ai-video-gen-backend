@@ -7,7 +7,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from ai_video_gen_backend.domain.collection_item import StoredObject, VideoThumbnailGenerationError
+from ai_video_gen_backend.domain.collection_item import (
+    StorageError,
+    StoredObject,
+    VideoThumbnailGenerationError,
+)
 from ai_video_gen_backend.presentation.api.dependencies import (
     get_object_storage,
     get_video_thumbnail_generator,
@@ -16,9 +20,10 @@ from tests.support import seed_baseline_data
 
 
 class FakeObjectStorage:
-    def __init__(self) -> None:
+    def __init__(self, *, fail_on_delete: bool = False) -> None:
         self.uploaded_keys: list[str] = []
         self.deleted_keys: list[str] = []
+        self.fail_on_delete = fail_on_delete
 
     def upload_object(
         self,
@@ -40,6 +45,8 @@ class FakeObjectStorage:
         )
 
     def delete_object(self, *, key: str) -> None:
+        if self.fail_on_delete:
+            raise StorageError('delete failed')
         self.deleted_keys.append(key)
 
 
@@ -117,6 +124,92 @@ def test_create_collection_item_success(client: TestClient, db_session: Session)
     payload = response.json()
     assert payload['name'] == 'Created Item'
     assert payload['mediaType'] == 'image'
+
+
+def test_delete_collection_item_success(client: TestClient, db_session: Session) -> None:
+    ids = seed_baseline_data(db_session)
+
+    response = client.delete(
+        f'/api/v1/collections/{ids["collection_id"]}/items/{ids["item_id"]}'
+    )
+
+    assert response.status_code == 204
+
+    items_response = client.get(f'/api/v1/collections/{ids["collection_id"]}/items')
+    assert items_response.status_code == 200
+    assert items_response.json() == []
+
+
+def test_delete_collection_item_not_found_returns_404(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+
+    response = client.delete(
+        f'/api/v1/collections/{ids["collection_id"]}/items/{uuid4()}'
+    )
+
+    assert response.status_code == 404
+    assert response.json()['error']['code'] == 'collection_item_not_found'
+
+
+def test_delete_collection_item_removes_storage_object(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+    fake_storage = FakeObjectStorage()
+    app = _override_upload_dependencies(client, fake_storage)
+
+    try:
+        upload_response = client.post(
+            f'/api/v1/collections/{ids["collection_id"]}/items/upload',
+            data={'projectId': str(ids['project_id'])},
+            files={'file': ('upload.jpg', b'fake-image-bytes', 'image/jpeg')},
+        )
+        assert upload_response.status_code == 201
+        item_id = upload_response.json()['id']
+
+        delete_response = client.delete(
+            f'/api/v1/collections/{ids["collection_id"]}/items/{item_id}'
+        )
+    finally:
+        app.dependency_overrides.pop(get_object_storage, None)
+
+    assert delete_response.status_code == 204
+    assert set(fake_storage.deleted_keys) == set(fake_storage.uploaded_keys)
+
+
+def test_delete_collection_item_storage_failure_returns_502(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+    fake_storage = FakeObjectStorage(fail_on_delete=True)
+    app = _override_upload_dependencies(client, fake_storage)
+
+    try:
+        upload_response = client.post(
+            f'/api/v1/collections/{ids["collection_id"]}/items/upload',
+            data={'projectId': str(ids['project_id'])},
+            files={'file': ('upload.jpg', b'fake-image-bytes', 'image/jpeg')},
+        )
+        assert upload_response.status_code == 201
+        item_id = upload_response.json()['id']
+
+        delete_response = client.delete(
+            f'/api/v1/collections/{ids["collection_id"]}/items/{item_id}'
+        )
+    finally:
+        app.dependency_overrides.pop(get_object_storage, None)
+
+    assert delete_response.status_code == 502
+    assert delete_response.json()['error']['code'] == 'storage_delete_failed'
+
+    items_response = client.get(f'/api/v1/collections/{ids["collection_id"]}/items')
+    assert items_response.status_code == 200
+    assert any(item['id'] == item_id for item in items_response.json())
 
 
 def test_generate_collection_item_stub(client: TestClient, db_session: Session) -> None:
