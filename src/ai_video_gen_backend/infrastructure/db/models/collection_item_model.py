@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
-from sqlalchemy import DateTime, String, Uuid, func
+from sqlalchemy import BigInteger, DateTime, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ai_video_gen_backend.domain.collection_item import JsonValue, MediaType
@@ -27,6 +27,7 @@ class CollectionItemModel(Base):
         ),
         sa.Index('ix_collection_items_collection_id', 'collection_id'),
         sa.Index('ix_collection_items_project_id', 'project_id'),
+        sa.Index('ix_collection_items_storage_bucket_key', 'storage_bucket', 'storage_key'),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -42,6 +43,11 @@ class CollectionItemModel(Base):
     generation_source: Mapped[str] = mapped_column(
         String(50), nullable=False, server_default='upload'
     )
+    storage_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    storage_bucket: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    storage_key: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    mime_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

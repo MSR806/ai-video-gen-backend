@@ -5,6 +5,9 @@ from .collection_item import (
     CollectionItemGenerationParams,
     CollectionItemRepositoryPort,
     GeneratedCollectionItem,
+    ObjectStoragePort,
+    StorageError,
+    StoredObject,
 )
 from .project import Project, ProjectRepositoryPort, ProjectStatus
 from .scene import Scene, SceneInput, SceneRepositoryPort
@@ -17,10 +20,13 @@ __all__ = [
     'CollectionItemRepositoryPort',
     'CollectionRepositoryPort',
     'GeneratedCollectionItem',
+    'ObjectStoragePort',
     'Project',
     'ProjectRepositoryPort',
     'ProjectStatus',
     'Scene',
     'SceneInput',
     'SceneRepositoryPort',
+    'StorageError',
+    'StoredObject',
 ]

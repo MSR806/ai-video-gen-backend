@@ -11,9 +11,11 @@ requires-python = ">=3.12"
 authors = [{ name = "AI Video Gen Team" }]
 dependencies = [
   "alembic>=1.16.5",
+  "boto3>=1.42.59",
   "fastapi>=0.116.1",
   "pydantic>=2.11.9",
   "pydantic-settings>=2.10.1",
+  "python-multipart>=0.0.20",
   "psycopg[binary]>=3.2.10",
   "sqlalchemy>=2.0.43",
   "uvicorn[standard]>=0.35.0",
@@ -61,6 +63,10 @@ exclude = ["^alembic/"]
 [[tool.mypy.overrides]]
 module = ["alembic.*"]
 ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["boto3", "boto3.*", "botocore", "botocore.*", "s3transfer.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 addopts = "-q"

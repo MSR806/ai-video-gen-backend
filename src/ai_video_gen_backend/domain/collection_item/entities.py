@@ -56,6 +56,11 @@ class CollectionItem:
     generation_source: str
     created_at: datetime
     updated_at: datetime
+    storage_provider: str | None = None
+    storage_bucket: str | None = None
+    storage_key: str | None = None
+    mime_type: str | None = None
+    size_bytes: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +73,11 @@ class CollectionItemCreationPayload:
     url: str
     metadata: JsonObject
     generation_source: str = 'upload'
+    storage_provider: str | None = None
+    storage_bucket: str | None = None
+    storage_key: str | None = None
+    mime_type: str | None = None
+    size_bytes: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

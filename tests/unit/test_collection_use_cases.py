@@ -16,7 +16,9 @@ class FakeCollectionRepository:
         self.collections = collections
 
     def get_collections_by_project_id(self, project_id: UUID) -> list[Collection]:
-        return [collection for collection in self.collections if collection.project_id == project_id]
+        return [
+            collection for collection in self.collections if collection.project_id == project_id
+        ]
 
     def get_collection_by_id(self, collection_id: UUID) -> Collection | None:
         return next(

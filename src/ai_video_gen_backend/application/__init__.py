@@ -7,6 +7,9 @@ from .collection_item import (
     CreateCollectionItemUseCase,
     GenerateCollectionItemUseCase,
     GetCollectionItemsUseCase,
+    PayloadTooLargeError,
+    UnsupportedMediaTypeError,
+    UploadCollectionItemUseCase,
 )
 from .project import CreateProjectUseCase, GetAllProjectsUseCase, GetProjectByIdUseCase
 from .scene import GetProjectScenesUseCase, SyncScenesUseCase
@@ -22,5 +25,8 @@ __all__ = [
     'GetProjectByIdUseCase',
     'GetProjectCollectionsUseCase',
     'GetProjectScenesUseCase',
+    'PayloadTooLargeError',
     'SyncScenesUseCase',
+    'UnsupportedMediaTypeError',
+    'UploadCollectionItemUseCase',
 ]

@@ -8,6 +8,7 @@ FastAPI + PostgreSQL backend for the AI video generation platform.
 - SQLAlchemy 2.0
 - Alembic
 - PostgreSQL
+- MinIO (S3-compatible object storage)
 - Ruff + MyPy + Pytest + pre-commit
 
 ## Setup
@@ -30,6 +31,12 @@ uv run uvicorn ai_video_gen_backend.main:app --reload
 docker compose up --build
 ```
 
+This brings up:
+- API on `http://localhost:8000`
+- Postgres on `localhost:5432`
+- MinIO S3 API on `http://localhost:9000`
+- MinIO Console on `http://localhost:9001`
+
 ## Quality checks
 
 ```bash
@@ -48,6 +55,7 @@ Base path: `/api/v1`
 - `GET /api/v1/collections/{collection_id}`
 - `GET /api/v1/collections/{collection_id}/items`
 - `POST /api/v1/collections/{collection_id}/items`
+- `POST /api/v1/collections/{collection_id}/items/upload`
 - `POST /api/v1/collections/{collection_id}/items/generate`
 - `GET /api/v1/projects/{project_id}/scenes`
 - `PUT /api/v1/projects/{project_id}/scenes`

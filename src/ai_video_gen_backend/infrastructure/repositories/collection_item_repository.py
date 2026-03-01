@@ -45,6 +45,11 @@ class CollectionItemSqlRepository:
             url=payload.url,
             metadata_json=payload.metadata,
             generation_source=payload.generation_source,
+            storage_provider=payload.storage_provider,
+            storage_bucket=payload.storage_bucket,
+            storage_key=payload.storage_key,
+            mime_type=payload.mime_type,
+            size_bytes=payload.size_bytes,
         )
         self._session.add(model)
         self._session.commit()
@@ -93,6 +98,11 @@ class CollectionItemSqlRepository:
             url=model.url,
             metadata=metadata,
             generation_source=model.generation_source,
+            storage_provider=model.storage_provider,
+            storage_bucket=model.storage_bucket,
+            storage_key=model.storage_key,
+            mime_type=model.mime_type,
+            size_bytes=model.size_bytes,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )

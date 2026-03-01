@@ -28,6 +28,11 @@ class CollectionItemResponse(StrictSchema):
     url: str
     metadata: dict[str, JsonValue]
     generation_source: str = Field(alias='generationSource')
+    storage_provider: str | None = Field(default=None, alias='storageProvider')
+    storage_bucket: str | None = Field(default=None, alias='storageBucket')
+    storage_key: str | None = Field(default=None, alias='storageKey')
+    mime_type: str | None = Field(default=None, alias='mimeType')
+    size_bytes: int | None = Field(default=None, alias='sizeBytes')
     created_at: datetime = Field(alias='createdAt')
     updated_at: datetime = Field(alias='updatedAt')
 
@@ -43,6 +48,11 @@ class CollectionItemResponse(StrictSchema):
             url=item.url,
             metadata=item.metadata,
             generation_source=item.generation_source,
+            storage_provider=item.storage_provider,
+            storage_bucket=item.storage_bucket,
+            storage_key=item.storage_key,
+            mime_type=item.mime_type,
+            size_bytes=item.size_bytes,
             created_at=item.created_at,
             updated_at=item.updated_at,
         )
