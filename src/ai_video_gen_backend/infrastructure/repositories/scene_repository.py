@@ -37,7 +37,6 @@ class SceneSqlRepository:
                         project_id=project_id,
                         name=scene.name,
                         scene_number=scene.scene_number,
-                        body=scene.body,
                         content_json=scene.content,
                     )
                 )
@@ -52,7 +51,6 @@ class SceneSqlRepository:
             project_id=model.project_id,
             name=model.name,
             scene_number=model.scene_number,
-            body=model.body,
             content=model.content_json,
             created_at=model.created_at,
             updated_at=model.updated_at,

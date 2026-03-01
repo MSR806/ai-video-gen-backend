@@ -14,3 +14,11 @@ class Collection:
     description: str
     created_at: datetime
     updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class CollectionCreationPayload:
+    project_id: UUID
+    name: str
+    tag: str
+    description: str

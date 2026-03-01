@@ -22,3 +22,21 @@ def test_get_project_by_id_returns_404_when_missing(client: TestClient) -> None:
 
     assert response.status_code == 404
     assert response.json()['error']['code'] == 'project_not_found'
+
+
+def test_create_project_returns_created_project(client: TestClient) -> None:
+    response = client.post(
+        '/api/v1/projects',
+        json={
+            'name': 'New Project',
+            'description': 'Created from API test',
+            'status': 'draft',
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload['id']
+    assert payload['name'] == 'New Project'
+    assert payload['description'] == 'Created from API test'
+    assert payload['status'] == 'draft'

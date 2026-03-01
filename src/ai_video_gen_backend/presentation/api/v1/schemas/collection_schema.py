@@ -29,3 +29,9 @@ class CollectionResponse(StrictSchema):
             created_at=collection.created_at,
             updated_at=collection.updated_at,
         )
+
+
+class CreateCollectionRequest(StrictSchema):
+    name: str
+    tag: str
+    description: str

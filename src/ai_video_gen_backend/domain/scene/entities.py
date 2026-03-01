@@ -14,8 +14,7 @@ class Scene:
     project_id: UUID
     name: str
     scene_number: int
-    body: str
-    content: JsonObject | None
+    content: JsonObject
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -25,5 +24,4 @@ class SceneInput:
     id: UUID | None = None
     name: str | None = None
     scene_number: int | None = None
-    body: str | None = None
     content: JsonObject | None = None

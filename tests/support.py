@@ -54,8 +54,7 @@ def seed_baseline_data(session: Session) -> dict[str, UUID]:
             project_id=project_id,
             name='Scene 1',
             scene_number=1,
-            body='Opening scene',
-            content_json=None,
+            content_json={'text': 'Opening scene'},
         )
     )
 

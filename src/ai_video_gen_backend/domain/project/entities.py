@@ -16,3 +16,10 @@ class Project:
     status: ProjectStatus
     created_at: datetime
     updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectCreationPayload:
+    name: str
+    description: str
+    status: ProjectStatus = 'draft'

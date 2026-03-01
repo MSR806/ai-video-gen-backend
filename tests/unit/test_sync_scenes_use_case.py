@@ -35,10 +35,10 @@ def test_sync_scenes_creates_default_scene_when_payload_is_empty() -> None:
     assert len(normalized) == 1
     assert normalized[0].scene_number == 1
     assert normalized[0].name == 'Untitled Scene 1'
-    assert normalized[0].body == ''
+    assert normalized[0].content == {'text': ''}
 
 
-def test_sync_scenes_normalizes_order_and_extracts_body_from_legacy_content() -> None:
+def test_sync_scenes_normalizes_order_and_defaults_content() -> None:
     repository = FakeSceneRepository()
     use_case = SyncScenesUseCase(repository)
     project_id = uuid4()
@@ -47,15 +47,9 @@ def test_sync_scenes_normalizes_order_and_extracts_body_from_legacy_content() ->
         SceneInput(
             id=uuid4(),
             name='  ',
-            content={
-                'type': 'doc',
-                'content': [
-                    {'type': 'paragraph', 'content': [{'type': 'text', 'text': 'First line'}]},
-                    {'type': 'paragraph', 'content': [{'type': 'text', 'text': 'Second line'}]},
-                ],
-            },
+            content={'text': 'First line\n\nSecond line'},
         ),
-        SceneInput(name='Closing', body='Final line'),
+        SceneInput(name='Closing'),
     ]
 
     normalized = use_case.execute(project_id, inputs)
@@ -63,7 +57,7 @@ def test_sync_scenes_normalizes_order_and_extracts_body_from_legacy_content() ->
     assert len(normalized) == 2
     assert normalized[0].scene_number == 1
     assert normalized[0].name == 'Untitled Scene 1'
-    assert 'First line' in normalized[0].body
+    assert normalized[0].content == {'text': 'First line\n\nSecond line'}
     assert normalized[1].scene_number == 2
     assert normalized[1].name == 'Closing'
-    assert normalized[1].body == 'Final line'
+    assert normalized[1].content == {'text': ''}

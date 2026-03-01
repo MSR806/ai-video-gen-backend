@@ -27,8 +27,8 @@ def test_put_scenes_replaces_scenes_and_normalizes_numbers(
         f'/api/v1/projects/{ids["project_id"]}/scenes',
         json={
             'scenes': [
-                {'name': 'First', 'sceneNumber': 99, 'body': 'Body A'},
-                {'name': '', 'body': 'Body B'},
+                {'name': 'First', 'sceneNumber': 99, 'content': {'text': 'Body A'}},
+                {'name': '', 'content': {'text': 'Body B'}},
             ]
         },
     )
@@ -39,6 +39,7 @@ def test_put_scenes_replaces_scenes_and_normalizes_numbers(
     assert payload['scenes'][0]['sceneNumber'] == 1
     assert payload['scenes'][1]['sceneNumber'] == 2
     assert payload['scenes'][1]['name'] == 'Untitled Scene 2'
+    assert payload['scenes'][0]['content'] == {'text': 'Body A'}
 
     get_response = client.get(f'/api/v1/projects/{ids["project_id"]}/scenes')
     get_payload = get_response.json()

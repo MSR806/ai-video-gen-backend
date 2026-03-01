@@ -6,6 +6,25 @@ from sqlalchemy.orm import Session
 from tests.support import seed_baseline_data
 
 
+def test_create_collection_success(client: TestClient, db_session: Session) -> None:
+    ids = seed_baseline_data(db_session)
+
+    response = client.post(
+        f'/api/v1/projects/{ids["project_id"]}/collections',
+        json={
+            'name': 'New Collection',
+            'tag': 'reference',
+            'description': 'Created via API',
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload['name'] == 'New Collection'
+    assert payload['tag'] == 'reference'
+    assert payload['projectId'] == str(ids['project_id'])
+
+
 def test_get_collection_items_returns_seeded_items(client: TestClient, db_session: Session) -> None:
     ids = seed_baseline_data(db_session)
 

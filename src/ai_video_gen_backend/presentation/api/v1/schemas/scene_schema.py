@@ -15,8 +15,7 @@ class SceneResponse(StrictSchema):
     project_id: UUID = Field(alias='projectId')
     name: str
     scene_number: int = Field(alias='sceneNumber')
-    body: str
-    content: dict[str, JsonValue] | None = None
+    content: dict[str, JsonValue]
     created_at: datetime | None = Field(default=None, alias='createdAt')
     updated_at: datetime | None = Field(default=None, alias='updatedAt')
 
@@ -27,7 +26,6 @@ class SceneResponse(StrictSchema):
             project_id=scene.project_id,
             name=scene.name,
             scene_number=scene.scene_number,
-            body=scene.body,
             content=scene.content,
             created_at=scene.created_at,
             updated_at=scene.updated_at,
@@ -38,7 +36,6 @@ class SceneInputRequest(StrictSchema):
     id: UUID | None = None
     name: str | None = None
     scene_number: int | None = Field(default=None, alias='sceneNumber')
-    body: str | None = None
     content: dict[str, JsonValue] | None = None
 
 

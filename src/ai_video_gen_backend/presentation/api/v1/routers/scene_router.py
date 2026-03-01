@@ -51,7 +51,6 @@ def sync_project_scenes(
             id=scene.id,
             name=scene.name,
             scene_number=scene.scene_number,
-            body=scene.body,
             content=scene.content,
         )
         for scene in request.scenes

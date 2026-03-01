@@ -29,16 +29,14 @@ def test_scene_repository_bulk_replace_is_atomic_per_project(db_session: Session
             project_id=project_id,
             name='Scene A',
             scene_number=1,
-            body='A',
-            content=None,
+            content={'text': 'A'},
         ),
         Scene(
             id=uuid4(),
             project_id=project_id,
             name='Scene B',
             scene_number=2,
-            body='B',
-            content=None,
+            content={'text': 'B'},
         ),
     ]
     repository.bulk_replace(project_id, first_batch)
@@ -49,8 +47,7 @@ def test_scene_repository_bulk_replace_is_atomic_per_project(db_session: Session
             project_id=project_id,
             name='Scene Z',
             scene_number=1,
-            body='Z',
-            content=None,
+            content={'text': 'Z'},
         )
     ]
     repository.bulk_replace(project_id, second_batch)

@@ -1,4 +1,4 @@
-from .entities import Project, ProjectStatus
+from .entities import Project, ProjectCreationPayload, ProjectStatus
 from .ports import ProjectRepositoryPort
 
-__all__ = ['Project', 'ProjectRepositoryPort', 'ProjectStatus']
+__all__ = ['Project', 'ProjectCreationPayload', 'ProjectRepositoryPort', 'ProjectStatus']

@@ -28,10 +28,7 @@ class SceneModel(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     scene_number: Mapped[int] = mapped_column(Integer, nullable=False)
-    body: Mapped[str] = mapped_column(sa.Text, nullable=False)
-    content_json: Mapped[dict[str, JsonValue] | None] = mapped_column(
-        'content', JSONType, nullable=True
-    )
+    content_json: Mapped[dict[str, JsonValue]] = mapped_column('content', JSONType, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

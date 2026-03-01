@@ -28,3 +28,9 @@ class ProjectResponse(StrictSchema):
             created_at=project.created_at,
             updated_at=project.updated_at,
         )
+
+
+class CreateProjectRequest(StrictSchema):
+    name: str
+    description: str
+    status: Literal['draft', 'in-progress', 'completed'] = 'draft'

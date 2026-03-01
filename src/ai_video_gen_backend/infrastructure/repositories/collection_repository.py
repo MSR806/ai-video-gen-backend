@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ai_video_gen_backend.domain.collection import Collection
+from ai_video_gen_backend.domain.collection import Collection, CollectionCreationPayload
 from ai_video_gen_backend.infrastructure.db.models import CollectionModel
 
 
@@ -26,6 +26,18 @@ class CollectionSqlRepository:
         stmt = select(CollectionModel).where(CollectionModel.id == collection_id)
         record = self._session.execute(stmt).scalar_one_or_none()
         return self._to_domain(record) if record is not None else None
+
+    def create_collection(self, payload: CollectionCreationPayload) -> Collection:
+        model = CollectionModel(
+            project_id=payload.project_id,
+            name=payload.name,
+            tag=payload.tag,
+            description=payload.description,
+        )
+        self._session.add(model)
+        self._session.commit()
+        self._session.refresh(model)
+        return self._to_domain(model)
 
     def _to_domain(self, model: CollectionModel) -> Collection:
         return Collection(

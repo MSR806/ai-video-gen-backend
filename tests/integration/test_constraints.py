@@ -33,16 +33,14 @@ def test_unique_scene_number_constraint(db_session: Session) -> None:
                 project_id=project_id,
                 name='One',
                 scene_number=1,
-                body='One',
-                content_json=None,
+                content_json={'text': 'One'},
             ),
             SceneModel(
                 id=uuid4(),
                 project_id=project_id,
                 name='Duplicate',
                 scene_number=1,
-                body='Duplicate',
-                content_json=None,
+                content_json={'text': 'Duplicate'},
             ),
         ]
     )

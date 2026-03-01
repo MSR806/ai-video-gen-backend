@@ -25,18 +25,13 @@ class SyncScenesUseCase:
             if len(name) == 0:
                 name = f'Untitled Scene {scene_number}'
 
-            body = scene_input.body if isinstance(scene_input.body, str) else ''
-            if len(body.strip()) == 0 and scene_input.content is not None:
-                body = self._extract_text_from_node(scene_input.content).strip()
-
             normalized.append(
                 Scene(
                     id=scene_input.id or uuid4(),
                     project_id=project_id,
                     name=name,
                     scene_number=scene_number,
-                    body=body,
-                    content=scene_input.content,
+                    content=scene_input.content or self._empty_content(),
                 )
             )
 
@@ -48,35 +43,8 @@ class SyncScenesUseCase:
             project_id=project_id,
             name=f'Untitled Scene {scene_number}',
             scene_number=scene_number,
-            body='',
-            content=None,
+            content=self._empty_content(),
         )
 
-    def _extract_text_from_node(self, node: object) -> str:
-        if node is None:
-            return ''
-
-        if isinstance(node, str):
-            return node
-
-        if isinstance(node, list):
-            text_parts = [self._extract_text_from_node(item) for item in node]
-            return '\n'.join(filter(None, text_parts)).replace('\n\n\n', '\n\n')
-
-        if not isinstance(node, dict):
-            return ''
-
-        node_type = node.get('type')
-        if node_type == 'text':
-            text_value = node.get('text')
-            return text_value if isinstance(text_value, str) else ''
-
-        content = node.get('content')
-        if isinstance(content, list):
-            if node_type == 'doc':
-                blocks = [self._extract_text_from_node(block) for block in content]
-                return '\n\n'.join(filter(None, blocks)).replace('\n\n\n', '\n\n')
-
-            return ''.join(self._extract_text_from_node(child) for child in content)
-
-        return ''
+    def _empty_content(self) -> dict[str, object]:
+        return {'text': ''}
