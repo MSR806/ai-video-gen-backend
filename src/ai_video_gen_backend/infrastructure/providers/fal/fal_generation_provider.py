@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 import os
+import re
 from collections.abc import Mapping
 from types import ModuleType
 
 import fal_client
+import httpx
 
 from ai_video_gen_backend.domain.generation import (
     GenerationProviderPort,
@@ -23,6 +26,8 @@ from ai_video_gen_backend.infrastructure.providers.fal.model_mapper_registry imp
     get_model_mapper,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class FalGenerationProvider(GenerationProviderPort):
     def __init__(self, *, api_key: str) -> None:
@@ -33,6 +38,14 @@ class FalGenerationProvider(GenerationProviderPort):
         profile = get_model_profile(request.model_key or '')
         mapper = get_model_mapper(profile.mapper_key)
         arguments = mapper.to_arguments(request)
+        logger.info(
+            'Submitting generation request to FAL '
+            'endpoint=%s model_key=%s payload=%s webhook_url=%s',
+            profile.endpoint_id,
+            profile.key,
+            arguments,
+            webhook_url,
+        )
         handler = fal_client.submit(
             profile.endpoint_id,
             arguments=arguments,
@@ -43,6 +56,13 @@ class FalGenerationProvider(GenerationProviderPort):
         if request_id is None:
             msg = 'fal submit response missing request_id'
             raise RuntimeError(msg)
+
+        logger.info(
+            'FAL generation request accepted endpoint=%s model_key=%s request_id=%s',
+            profile.endpoint_id,
+            profile.key,
+            request_id,
+        )
 
         return ProviderSubmission(provider_request_id=request_id)
 
@@ -75,19 +95,22 @@ class FalGenerationProvider(GenerationProviderPort):
         mapper = get_model_mapper(profile.mapper_key)
         response = fal_client.result(endpoint_id, provider_request_id)
         payload = _to_dict(response)
-        output_url = mapper.extract_output_url(payload)
+        resolved_payload = _resolve_result_payload(payload)
+        output_url = mapper.extract_output_url(resolved_payload)
+        if output_url is None:
+            output_url = _extract_output_url_from_payload(resolved_payload)
         if output_url is None:
             return ProviderResult(
                 status='FAILED',
                 output_url=None,
-                raw_response=payload,
+                raw_response=resolved_payload,
                 error_message='No output URL in provider response',
             )
 
         return ProviderResult(
             status='SUCCEEDED',
             output_url=output_url,
-            raw_response=payload,
+            raw_response=resolved_payload,
         )
 
     def cancel(self, *, endpoint_id: str, provider_request_id: str) -> None:
@@ -165,6 +188,24 @@ def _extract_status(status_response: object) -> str:
         status_value = status_response.get('status')
         if isinstance(status_value, str):
             return status_value
+        state_value = status_response.get('state')
+        if isinstance(state_value, str):
+            return state_value
+
+    # fal-client may return typed status objects like Completed(logs=..., metrics=...)
+    # without a `status` attribute. Fall back to class-name normalization.
+    class_name = type(status_response).__name__
+    if len(class_name) > 0:
+        normalized = re.sub(r'(?<!^)([A-Z])', r'_\1', class_name).upper()
+        if normalized in {
+            'IN_QUEUE',
+            'IN_PROGRESS',
+            'COMPLETED',
+            'CANCELLED',
+            'CANCELED',
+            'FAILED',
+        }:
+            return normalized
 
     return 'ERROR'
 
@@ -200,3 +241,48 @@ def _extract_output_url_from_payload(payload: dict[str, object]) -> str | None:
                     return url
 
     return None
+
+
+def _resolve_result_payload(payload: dict[str, object]) -> dict[str, object]:
+    if _extract_output_url_from_payload(payload) is not None:
+        return payload
+
+    response_url = _extract_response_url(payload)
+    if response_url is None:
+        return payload
+
+    response_payload = _fetch_response_payload(response_url)
+    if response_payload is None:
+        return payload
+
+    return response_payload
+
+
+def _extract_response_url(payload: dict[str, object]) -> str | None:
+    candidates: list[dict[str, object]] = []
+    nested_payload = payload.get('payload')
+    if isinstance(nested_payload, dict):
+        candidates.append(nested_payload)
+    candidates.append(payload)
+
+    for candidate in candidates:
+        response_url = candidate.get('response_url')
+        if isinstance(response_url, str) and len(response_url.strip()) > 0:
+            return response_url.strip()
+        response_url_camel = candidate.get('responseUrl')
+        if isinstance(response_url_camel, str) and len(response_url_camel.strip()) > 0:
+            return response_url_camel.strip()
+
+    return None
+
+
+def _fetch_response_payload(response_url: str) -> dict[str, object] | None:
+    try:
+        with httpx.Client(timeout=20.0, follow_redirects=True) as client:
+            response = client.get(response_url)
+            response.raise_for_status()
+            parsed = response.json()
+    except (httpx.HTTPError, ValueError):
+        return None
+
+    return _to_dict(parsed)

@@ -1,6 +1,6 @@
 """generation jobs and collection item status
 
-Revision ID: 0004_generation_jobs_and_item_status
+Revision ID: 4fe5f5908953
 Revises: 0003_item_storage_fields
 Create Date: 2026-03-01 21:00:00
 """
@@ -12,7 +12,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = '0004_generation_jobs_and_item_status'
+revision = '4fe5f5908953'
 down_revision = '0003_item_storage_fields'
 branch_labels = None
 depends_on = None

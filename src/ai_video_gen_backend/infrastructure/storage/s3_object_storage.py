@@ -57,7 +57,7 @@ class S3ObjectStorage:
             provider='s3',
             bucket=self._bucket,
             key=key,
-            url=f'{self._public_base_url}/{self._bucket}/{quote(key, safe="/")}',
+            url=self._build_public_url(key=key),
             mime_type=content_type,
             size_bytes=size_bytes,
         )
@@ -67,3 +67,7 @@ class S3ObjectStorage:
             self._client.delete_object(Bucket=self._bucket, Key=key)
         except (BotoCoreError, ClientError) as exc:
             raise StorageError('Failed to delete object from storage') from exc
+
+    def _build_public_url(self, *, key: str) -> str:
+        encoded_key = quote(key, safe='/')
+        return f'{self._public_base_url}/{encoded_key}'

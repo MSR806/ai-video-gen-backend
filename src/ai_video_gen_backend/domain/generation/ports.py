@@ -6,6 +6,7 @@ from uuid import UUID
 from .entities import (
     GenerationJob,
     GenerationRequest,
+    GenerationStatus,
     ProviderResult,
     ProviderStatus,
     ProviderSubmission,
@@ -47,6 +48,15 @@ class GenerationJobRepositoryPort(Protocol):
     def get_by_id(self, job_id: UUID) -> GenerationJob | None: ...
 
     def get_by_provider_request_id(self, provider_request_id: str) -> GenerationJob | None: ...
+
+    def list_jobs(
+        self,
+        *,
+        collection_id: UUID | None = None,
+        project_id: UUID | None = None,
+        statuses: list[GenerationStatus] | None = None,
+        limit: int = 50,
+    ) -> list[GenerationJob]: ...
 
     def mark_submitted(self, job_id: UUID, *, provider_request_id: str) -> GenerationJob: ...
 

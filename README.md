@@ -8,7 +8,7 @@ FastAPI + PostgreSQL backend for the AI video generation platform.
 - SQLAlchemy 2.0
 - Alembic
 - PostgreSQL
-- MinIO (S3-compatible object storage)
+- S3-compatible object storage (external bucket + CDN/public URL)
 - Ruff + MyPy + Pytest + pre-commit
 
 ## Setup
@@ -40,8 +40,9 @@ docker compose up --build
 This brings up:
 - API on `http://localhost:8000`
 - Postgres on `localhost:5432`
-- MinIO S3 API on `http://localhost:9000`
-- MinIO Console on `http://localhost:9001`
+
+Note: object storage is expected to be an external S3-compatible service configured via
+`STORAGE_*` environment variables.
 
 ## Quality checks
 

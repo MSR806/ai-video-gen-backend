@@ -10,13 +10,13 @@ class Settings(BaseSettings):
     log_level: str = 'INFO'
     api_v1_prefix: str = '/api/v1'
     database_url: str = 'postgresql+psycopg://app:app@localhost:5432/ai_video_gen'
-    storage_endpoint: str = 'http://minio:9000'
-    storage_public_base_url: str = 'http://localhost:9000'
-    storage_access_key: str = 'minioadmin'
-    storage_secret_key: str = 'minioadmin'
-    storage_bucket: str = 'ai-video-gen-media'
+    storage_endpoint: str = 'https://s3.us-east-1.amazonaws.com'
+    storage_public_base_url: str = 'https://dev.assets.mindumpai.com'
+    storage_access_key: str = ''
+    storage_secret_key: str = ''
+    storage_bucket: str = 'mindumpai-user-media-dev'
     storage_region: str = 'us-east-1'
-    storage_secure: bool = False
+    storage_secure: bool = True
     video_thumbnail_ffmpeg_bin: str = 'ffmpeg'
     max_upload_size_mb: int = 50
     allowed_upload_mime_prefixes: tuple[str, ...] = ('image/', 'video/')
@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     generation_result_max_download_mb: int = 25
 
     model_config = SettingsConfigDict(
-        env_file='.env',
+        env_file=('.env', '.env.local'),
         env_file_encoding='utf-8',
         extra='ignore',
     )

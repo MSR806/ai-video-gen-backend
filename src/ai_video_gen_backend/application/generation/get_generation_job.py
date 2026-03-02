@@ -29,7 +29,12 @@ class GetGenerationJobUseCase:
             return job
 
         threshold = datetime.now(UTC) - timedelta(seconds=self._reconcile_after_seconds)
-        if job.updated_at > threshold:
+        updated_at = (
+            job.updated_at
+            if job.updated_at.tzinfo is not None
+            else job.updated_at.replace(tzinfo=UTC)
+        )
+        if updated_at > threshold:
             return job
 
         return self._reconcile_generation_job_use_case.execute(job)
