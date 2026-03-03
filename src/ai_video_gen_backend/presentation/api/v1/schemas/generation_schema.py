@@ -35,12 +35,6 @@ class GenerateCollectionItemRequest(StrictSchema):
         return self
 
 
-class SubmitGenerationResponse(StrictSchema):
-    job_id: UUID = Field(alias='jobId')
-    item_id: UUID = Field(alias='itemId')
-    status: Literal['QUEUED', 'IN_PROGRESS']
-
-
 class GenerationJobError(StrictSchema):
     code: str | None = None
     message: str | None = None

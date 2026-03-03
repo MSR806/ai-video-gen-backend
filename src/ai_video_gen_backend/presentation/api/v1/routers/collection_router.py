@@ -13,6 +13,7 @@ from ai_video_gen_backend.application.collection import GetCollectionByIdUseCase
 from ai_video_gen_backend.application.collection_item import (
     CreateCollectionItemUseCase,
     DeleteCollectionItemUseCase,
+    GetCollectionItemByIdUseCase,
     GetCollectionItemsUseCase,
     PayloadTooLargeError,
     UnsupportedMediaTypeError,
@@ -46,11 +47,11 @@ from ai_video_gen_backend.presentation.api.dependencies import (
 )
 from ai_video_gen_backend.presentation.api.errors import ApiError
 from ai_video_gen_backend.presentation.api.v1.schemas import (
+    CollectionItemReadResponse,
     CollectionItemResponse,
     CollectionResponse,
     CreateCollectionItemRequest,
     GenerateCollectionItemRequest,
-    SubmitGenerationResponse,
 )
 
 router = APIRouter(tags=['collections'])
@@ -68,19 +69,37 @@ def get_collection(
     return CollectionResponse.from_domain(collection)
 
 
-@router.get('/collections/{collection_id}/items', response_model=list[CollectionItemResponse])
+@router.get('/collections/{collection_id}/items', response_model=list[CollectionItemReadResponse])
 def get_collection_items(
     collection_id: UUID,
     session: Session = Depends(get_db_session),
-) -> list[CollectionItemResponse]:
+) -> list[CollectionItemReadResponse]:
     collection_use_case = GetCollectionByIdUseCase(CollectionSqlRepository(session))
     if collection_use_case.execute(collection_id) is None:
         raise ApiError(status_code=404, code='collection_not_found', message='Collection not found')
 
     items_use_case = GetCollectionItemsUseCase(CollectionItemSqlRepository(session))
     return [
-        CollectionItemResponse.from_domain(item) for item in items_use_case.execute(collection_id)
+        CollectionItemReadResponse.from_domain(item)
+        for item in items_use_case.execute(collection_id)
     ]
+
+
+@router.get('/collection-items/{item_id}', response_model=CollectionItemReadResponse)
+def get_collection_item_by_id(
+    item_id: UUID,
+    session: Session = Depends(get_db_session),
+) -> CollectionItemReadResponse:
+    use_case = GetCollectionItemByIdUseCase(CollectionItemSqlRepository(session))
+    item = use_case.execute(item_id)
+    if item is None:
+        raise ApiError(
+            status_code=404,
+            code='collection_item_not_found',
+            message='Collection item not found',
+        )
+
+    return CollectionItemReadResponse.from_domain(item)
 
 
 @router.post(
@@ -266,7 +285,7 @@ def delete_collection_item(
 
 @router.post(
     '/collections/{collection_id}/items/generate',
-    response_model=SubmitGenerationResponse,
+    response_model=CollectionItemResponse,
     status_code=202,
 )
 def generate_collection_item(
@@ -275,7 +294,7 @@ def generate_collection_item(
     settings: Settings = Depends(get_app_settings),
     session: Session = Depends(get_db_session),
     generation_provider: GenerationProviderPort = Depends(get_generation_provider),
-) -> SubmitGenerationResponse:
+) -> CollectionItemResponse:
     collection_use_case = GetCollectionByIdUseCase(CollectionSqlRepository(session))
     collection = collection_use_case.execute(collection_id)
     if collection is None:
@@ -295,7 +314,7 @@ def generate_collection_item(
         webhook_url=_build_generation_webhook_url(settings),
     )
     try:
-        job_id, item_id, status = use_case.execute(
+        placeholder_item = use_case.execute(
             GenerationRequest(
                 project_id=request.project_id,
                 collection_id=collection_id,
@@ -329,7 +348,7 @@ def generate_collection_item(
             details={'reason': str(exc.__class__.__name__)},
         ) from exc
 
-    return SubmitGenerationResponse(job_id=job_id, item_id=item_id, status=status)
+    return CollectionItemResponse.from_domain(placeholder_item)
 
 
 def _parse_upload_metadata(metadata_raw: str | None) -> JsonObject | None:

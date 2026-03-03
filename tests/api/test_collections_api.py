@@ -195,6 +195,40 @@ def test_get_collection_items_returns_seeded_items(client: TestClient, db_sessio
     payload = response.json()
     assert len(payload) == 1
     assert payload[0]['name'] == 'Seed Item'
+    assert 'storageProvider' not in payload[0]
+    assert 'storageBucket' not in payload[0]
+    assert 'storageKey' not in payload[0]
+    assert 'mimeType' not in payload[0]
+    assert 'sizeBytes' not in payload[0]
+    assert 'createdAt' not in payload[0]
+    assert 'updatedAt' not in payload[0]
+    assert 'generationSource' not in payload[0]
+
+
+def test_get_collection_item_by_id_returns_item(client: TestClient, db_session: Session) -> None:
+    ids = seed_baseline_data(db_session)
+
+    response = client.get(f'/api/v1/collection-items/{ids["item_id"]}')
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['id'] == str(ids['item_id'])
+    assert payload['name'] == 'Seed Item'
+    assert 'storageProvider' not in payload
+    assert 'storageBucket' not in payload
+    assert 'storageKey' not in payload
+    assert 'mimeType' not in payload
+    assert 'sizeBytes' not in payload
+    assert 'createdAt' not in payload
+    assert 'updatedAt' not in payload
+    assert 'generationSource' not in payload
+
+
+def test_get_collection_item_by_id_returns_404(client: TestClient) -> None:
+    response = client.get(f'/api/v1/collection-items/{uuid4()}')
+
+    assert response.status_code == 404
+    assert response.json()['error']['code'] == 'collection_item_not_found'
 
 
 def test_create_collection_item_success(client: TestClient, db_session: Session) -> None:
@@ -323,13 +357,14 @@ def test_generate_collection_item_returns_async_job(
 
     assert response.status_code == 202
     payload = response.json()
+    assert payload['id']
+    assert payload['status'] == 'GENERATING'
     assert payload['jobId']
-    assert payload['itemId']
-    assert payload['status'] in {'QUEUED', 'IN_PROGRESS'}
+    assert payload['url'] is None
 
     items_response = client.get(f'/api/v1/collections/{ids["collection_id"]}/items')
     assert items_response.status_code == 200
-    generated_item = next(item for item in items_response.json() if item['id'] == payload['itemId'])
+    generated_item = next(item for item in items_response.json() if item['id'] == payload['id'])
     assert generated_item['jobId'] == payload['jobId']
 
 
@@ -396,7 +431,7 @@ def test_generation_webhook_failure_marks_placeholder_item_failed(
             },
         )
         assert submit.status_code == 202
-        item_id = submit.json()['itemId']
+        item_id = submit.json()['id']
 
         webhook = client.post(
             '/api/v1/provider-webhooks/fal?token=',

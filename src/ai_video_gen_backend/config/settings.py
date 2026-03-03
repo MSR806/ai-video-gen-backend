@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     generation_default_provider: str = 'fal'
     generation_webhook_public_base_url: str = 'http://localhost:8000'
     generation_webhook_token: str = ''
-    generation_status_reconcile_after_seconds: int = 20
+    generation_status_reconcile_after_seconds: int = 2
     generation_result_max_download_mb: int = 25
 
     model_config = SettingsConfigDict(

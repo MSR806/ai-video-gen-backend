@@ -59,6 +59,36 @@ class CollectionItemResponse(StrictSchema):
         )
 
 
+class CollectionItemReadResponse(StrictSchema):
+    id: UUID
+    project_id: UUID = Field(alias='projectId')
+    collection_id: UUID = Field(alias='collectionId')
+    media_type: Literal['image', 'video'] = Field(alias='mediaType')
+    status: Literal['GENERATING', 'READY', 'FAILED']
+    name: str
+    description: str
+    url: str | None
+    metadata: dict[str, JsonValue]
+    generation_error_message: str | None = Field(default=None, alias='generationErrorMessage')
+    job_id: UUID | None = Field(default=None, alias='jobId')
+
+    @classmethod
+    def from_domain(cls, item: CollectionItem) -> CollectionItemReadResponse:
+        return cls(
+            id=item.id,
+            project_id=item.project_id,
+            collection_id=item.collection_id,
+            media_type=item.media_type,
+            status=item.status,
+            name=item.name,
+            description=item.description,
+            url=item.url,
+            metadata=item.metadata,
+            generation_error_message=item.generation_error_message,
+            job_id=item.job_id,
+        )
+
+
 class CreateCollectionItemRequest(StrictSchema):
     project_id: UUID = Field(alias='projectId')
     media_type: Literal['image', 'video'] = Field(alias='mediaType')

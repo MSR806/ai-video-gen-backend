@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from uuid import UUID
 
 from ai_video_gen_backend.domain.collection_item import (
+    CollectionItem,
     CollectionItemCreationPayload,
     CollectionItemRepositoryPort,
 )
@@ -36,7 +36,7 @@ class SubmitGenerationJobUseCase:
         self._generation_provider = generation_provider
         self._webhook_url = webhook_url
 
-    def execute(self, request: GenerationRequest) -> tuple[UUID, UUID, str]:
+    def execute(self, request: GenerationRequest) -> CollectionItem:
         self._validate_request(request)
 
         try:
@@ -96,11 +96,11 @@ class SubmitGenerationJobUseCase:
 
         try:
             submission = self._generation_provider.submit(request, webhook_url=self._webhook_url)
-            submitted = self._generation_job_repository.mark_submitted(
+            self._generation_job_repository.mark_submitted(
                 generation_job.id,
                 provider_request_id=submission.provider_request_id,
             )
-            return submitted.id, placeholder_item.id, submitted.status
+            return linked_item
         except Exception as exc:
             self._generation_job_repository.mark_failed(
                 generation_job.id,
