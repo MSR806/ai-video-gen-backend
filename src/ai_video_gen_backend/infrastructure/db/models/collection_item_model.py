@@ -30,6 +30,7 @@ class CollectionItemModel(Base):
         ),
         sa.Index('ix_collection_items_collection_id', 'collection_id'),
         sa.Index('ix_collection_items_project_id', 'project_id'),
+        sa.Index('ix_collection_items_job_id', 'job_id'),
         sa.Index('ix_collection_items_storage_bucket_key', 'storage_bucket', 'storage_key'),
     )
 
@@ -46,6 +47,7 @@ class CollectionItemModel(Base):
     generation_source: Mapped[str] = mapped_column(
         String(50), nullable=False, server_default='upload'
     )
+    job_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,

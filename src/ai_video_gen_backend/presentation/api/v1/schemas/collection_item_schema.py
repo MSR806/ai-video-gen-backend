@@ -25,6 +25,7 @@ class CollectionItemResponse(StrictSchema):
     metadata: dict[str, JsonValue]
     generation_source: str = Field(alias='generationSource')
     generation_error_message: str | None = Field(default=None, alias='generationErrorMessage')
+    job_id: UUID | None = Field(default=None, alias='jobId')
     storage_provider: str | None = Field(default=None, alias='storageProvider')
     storage_bucket: str | None = Field(default=None, alias='storageBucket')
     storage_key: str | None = Field(default=None, alias='storageKey')
@@ -47,6 +48,7 @@ class CollectionItemResponse(StrictSchema):
             metadata=item.metadata,
             generation_source=item.generation_source,
             generation_error_message=item.generation_error_message,
+            job_id=item.job_id,
             storage_provider=item.storage_provider,
             storage_bucket=item.storage_bucket,
             storage_key=item.storage_key,

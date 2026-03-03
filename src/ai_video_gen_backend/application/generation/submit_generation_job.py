@@ -85,6 +85,13 @@ class SubmitGenerationJobUseCase:
                 'idempotencyKey': request.idempotency_key,
             },
         )
+        linked_item = self._collection_item_repository.assign_job_id(
+            item_id=placeholder_item.id,
+            job_id=generation_job.id,
+        )
+        if linked_item is None:
+            msg = f'Collection item {placeholder_item.id} not found after generation job creation'
+            raise LookupError(msg)
 
         try:
             submission = self._generation_provider.submit(request, webhook_url=self._webhook_url)

@@ -56,27 +56,6 @@ class GenerationJobSqlRepository:
         model = self._session.execute(stmt).scalar_one_or_none()
         return self._to_domain(model) if model is not None else None
 
-    def list_jobs(
-        self,
-        *,
-        collection_id: UUID | None = None,
-        project_id: UUID | None = None,
-        statuses: list[GenerationStatus] | None = None,
-        limit: int = 50,
-    ) -> list[GenerationJob]:
-        stmt = select(GenerationJobModel)
-
-        if collection_id is not None:
-            stmt = stmt.where(GenerationJobModel.collection_id == collection_id)
-        if project_id is not None:
-            stmt = stmt.where(GenerationJobModel.project_id == project_id)
-        if statuses:
-            stmt = stmt.where(GenerationJobModel.status.in_(statuses))
-
-        stmt = stmt.order_by(GenerationJobModel.created_at.desc()).limit(limit)
-        models = self._session.execute(stmt).scalars().all()
-        return [self._to_domain(model) for model in models]
-
     def mark_submitted(self, job_id: UUID, *, provider_request_id: str) -> GenerationJob:
         model = self._require_model(job_id)
         model.provider_request_id = provider_request_id

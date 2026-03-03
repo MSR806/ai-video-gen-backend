@@ -309,55 +309,17 @@ def test_generate_collection_item_returns_async_job(
     assert payload['itemId']
     assert payload['status'] in {'QUEUED', 'IN_PROGRESS'}
 
+    items_response = client.get(f'/api/v1/collections/{ids["collection_id"]}/items')
+    assert items_response.status_code == 200
+    generated_item = next(item for item in items_response.json() if item['id'] == payload['itemId'])
+    assert generated_item['jobId'] == payload['jobId']
+
 
 def test_get_generation_job_returns_404_when_missing(client: TestClient) -> None:
     response = client.get('/api/v1/generation-jobs/00000000-0000-0000-0000-000000000000')
 
     assert response.status_code == 404
     assert response.json()['error']['code'] == 'generation_job_not_found'
-
-
-def test_list_generation_jobs_requires_scope_filter(client: TestClient) -> None:
-    response = client.get('/api/v1/generation-jobs')
-
-    assert response.status_code == 400
-    assert response.json()['error']['code'] == 'validation_error'
-
-
-def test_list_generation_jobs_by_collection_and_status(
-    client: TestClient, db_session: Session
-) -> None:
-    ids = seed_baseline_data(db_session)
-    fake_provider = FakeGenerationProvider()
-    app = _override_generation_dependency(client, fake_provider)
-
-    try:
-        submit = client.post(
-            f'/api/v1/collections/{ids["collection_id"]}/items/generate',
-            json={
-                'projectId': str(ids['project_id']),
-                'operation': 'TEXT_TO_IMAGE',
-                'prompt': 'portrait',
-            },
-        )
-        assert submit.status_code == 202
-
-        response = client.get(
-            '/api/v1/generation-jobs',
-            params=[
-                ('collectionId', str(ids['collection_id'])),
-                ('status', 'QUEUED'),
-                ('status', 'IN_PROGRESS'),
-            ],
-        )
-    finally:
-        app.dependency_overrides.pop(get_generation_provider, None)
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert len(payload) >= 1
-    assert all(job['collectionId'] == str(ids['collection_id']) for job in payload)
-    assert all(job['status'] in {'QUEUED', 'IN_PROGRESS'} for job in payload)
 
 
 def test_generation_webhook_invalid_token_returns_401(

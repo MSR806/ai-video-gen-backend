@@ -45,6 +45,7 @@ class CollectionItemSqlRepository:
             metadata_json=payload.metadata,
             generation_source=payload.generation_source,
             generation_error_message=payload.generation_error_message,
+            job_id=payload.job_id,
             storage_provider=payload.storage_provider,
             storage_bucket=payload.storage_bucket,
             storage_key=payload.storage_key,
@@ -64,6 +65,16 @@ class CollectionItemSqlRepository:
         self._session.delete(model)
         self._session.commit()
         return True
+
+    def assign_job_id(self, *, item_id: UUID, job_id: UUID) -> CollectionItem | None:
+        model = self._session.get(CollectionItemModel, item_id)
+        if model is None:
+            return None
+
+        model.job_id = job_id
+        self._session.commit()
+        self._session.refresh(model)
+        return self._to_domain(model)
 
     def mark_generated_item_ready(
         self,
@@ -121,6 +132,7 @@ class CollectionItemSqlRepository:
             metadata=metadata,
             generation_source=model.generation_source,
             generation_error_message=model.generation_error_message,
+            job_id=model.job_id,
             storage_provider=model.storage_provider,
             storage_bucket=model.storage_bucket,
             storage_key=model.storage_key,

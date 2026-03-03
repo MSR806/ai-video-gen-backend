@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from ai_video_gen_backend.application.generation import (
     GenerationFinalizer,
     GetGenerationJobUseCase,
-    ListGenerationJobsUseCase,
     ReconcileGenerationJobUseCase,
 )
 from ai_video_gen_backend.config.settings import Settings
@@ -29,53 +27,6 @@ from ai_video_gen_backend.presentation.api.errors import ApiError
 from ai_video_gen_backend.presentation.api.v1.schemas import GenerationJobResponse
 
 router = APIRouter(tags=['generation'])
-
-GenerationJobStatusQuery = Literal['QUEUED', 'IN_PROGRESS', 'SUCCEEDED', 'FAILED', 'CANCELLED']
-
-
-@router.get('/generation-jobs', response_model=list[GenerationJobResponse])
-def list_generation_jobs(
-    collection_id: UUID | None = Query(default=None, alias='collectionId'),
-    project_id: UUID | None = Query(default=None, alias='projectId'),
-    status: list[GenerationJobStatusQuery] | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=200),
-    session: Session = Depends(get_db_session),
-    settings: Settings = Depends(get_app_settings),
-    generation_provider: GenerationProviderPort = Depends(get_generation_provider),
-    object_storage: ObjectStoragePort = Depends(get_object_storage),
-) -> list[GenerationJobResponse]:
-    if collection_id is None and project_id is None:
-        raise ApiError(
-            status_code=400,
-            code='validation_error',
-            message='collectionId or projectId is required',
-        )
-
-    generation_job_repository = GenerationJobSqlRepository(session)
-    generation_finalizer = GenerationFinalizer(
-        collection_item_repository=CollectionItemSqlRepository(session),
-        generation_job_repository=generation_job_repository,
-        object_storage=object_storage,
-        max_download_bytes=settings.generation_result_max_download_mb * 1024 * 1024,
-    )
-    reconcile_use_case = ReconcileGenerationJobUseCase(
-        generation_job_repository=generation_job_repository,
-        generation_provider=generation_provider,
-        generation_finalizer=generation_finalizer,
-    )
-    use_case = ListGenerationJobsUseCase(
-        generation_job_repository,
-        reconcile_use_case,
-        reconcile_after_seconds=settings.generation_status_reconcile_after_seconds,
-    )
-
-    jobs = use_case.execute(
-        collection_id=collection_id,
-        project_id=project_id,
-        statuses=status,
-        limit=limit,
-    )
-    return [GenerationJobResponse.from_domain(job) for job in jobs]
 
 
 @router.get('/generation-jobs/{job_id}', response_model=GenerationJobResponse)
