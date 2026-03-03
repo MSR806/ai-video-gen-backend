@@ -8,7 +8,6 @@ from ai_video_gen_backend.domain.generation import (
     GenerationJobRepositoryPort,
     GenerationProviderPort,
 )
-from ai_video_gen_backend.infrastructure.providers.fal import get_model_profile
 
 
 class HandleFalWebhookUseCase:
@@ -42,11 +41,9 @@ class HandleFalWebhookUseCase:
             provider_response = event.raw_response
 
             if output_url is None and job.provider_request_id is not None:
-                profile = get_model_profile(job.model_key)
                 result = self._generation_provider.result(
-                    endpoint_id=profile.endpoint_id,
-                    provider_request_id=job.provider_request_id,
                     model_key=job.model_key,
+                    provider_request_id=job.provider_request_id,
                 )
                 provider_response = result.raw_response
                 if result.status == 'SUCCEEDED':

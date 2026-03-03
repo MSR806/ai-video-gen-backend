@@ -17,9 +17,12 @@ from .generation import (
     GenerationProviderPort,
     GenerationRequest,
     GenerationStatus,
+    MediaDownloaderPort,
+    MediaDownloadError,
 )
 from .project import Project, ProjectRepositoryPort, ProjectStatus
 from .scene import Scene, SceneCreateInput, SceneRepositoryPort, SceneUpdateInput
+from .types import JsonObject, JsonValue
 
 __all__ = [
     'Collection',
@@ -36,6 +39,10 @@ __all__ = [
     'GenerationProviderPort',
     'GenerationRequest',
     'GenerationStatus',
+    'JsonObject',
+    'JsonValue',
+    'MediaDownloadError',
+    'MediaDownloaderPort',
     'ObjectStoragePort',
     'Project',
     'ProjectRepositoryPort',

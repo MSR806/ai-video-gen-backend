@@ -3,14 +3,15 @@ from __future__ import annotations
 from dataclasses import replace
 from uuid import UUID
 
-from ai_video_gen_backend.domain.collection_item import CollectionItemCreationPayload
+from ai_video_gen_backend.domain.collection_item import (
+    CollectionItemCreationPayload,
+    CollectionItemRepositoryPort,
+)
 from ai_video_gen_backend.domain.generation import (
     GenerationJobRepositoryPort,
     GenerationProviderPort,
     GenerationRequest,
 )
-from ai_video_gen_backend.infrastructure.providers.fal import resolve_model_key
-from ai_video_gen_backend.infrastructure.repositories import CollectionItemSqlRepository
 
 
 class UnsupportedModelError(Exception):
@@ -24,7 +25,7 @@ class InvalidGenerationRequestError(Exception):
 class SubmitGenerationJobUseCase:
     def __init__(
         self,
-        collection_item_repository: CollectionItemSqlRepository,
+        collection_item_repository: CollectionItemRepositoryPort,
         generation_job_repository: GenerationJobRepositoryPort,
         generation_provider: GenerationProviderPort,
         *,
@@ -39,7 +40,7 @@ class SubmitGenerationJobUseCase:
         self._validate_request(request)
 
         try:
-            resolved_model_key = resolve_model_key(
+            resolved_model_key = self._generation_provider.resolve_model_key(
                 operation=request.operation,
                 model_key=request.model_key,
             )

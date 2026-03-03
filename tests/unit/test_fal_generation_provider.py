@@ -52,9 +52,8 @@ def test_result_uses_response_url_payload_when_envelope_has_no_images(
     )
 
     result = provider.result(
-        endpoint_id='fal-ai/nano-banana',
-        provider_request_id='req-123',
         model_key='nano_banana_t2i_v1',
+        provider_request_id='req-123',
     )
 
     assert result.status == 'SUCCEEDED'
@@ -80,9 +79,8 @@ def test_result_fails_when_response_url_payload_has_no_output(
     )
 
     result = provider.result(
-        endpoint_id='fal-ai/nano-banana',
-        provider_request_id='req-456',
         model_key='nano_banana_t2i_v1',
+        provider_request_id='req-456',
     )
 
     assert result.status == 'FAILED'

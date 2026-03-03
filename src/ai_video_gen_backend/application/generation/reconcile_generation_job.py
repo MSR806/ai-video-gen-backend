@@ -6,7 +6,6 @@ from ai_video_gen_backend.domain.generation import (
     GenerationJobRepositoryPort,
     GenerationProviderPort,
 )
-from ai_video_gen_backend.infrastructure.providers.fal import get_model_profile
 
 
 class ReconcileGenerationJobUseCase:
@@ -27,9 +26,8 @@ class ReconcileGenerationJobUseCase:
         if job.provider_request_id is None:
             return job
 
-        profile = get_model_profile(job.model_key)
         provider_status = self._generation_provider.status(
-            endpoint_id=profile.endpoint_id,
+            model_key=job.model_key,
             provider_request_id=job.provider_request_id,
         )
 
@@ -47,9 +45,8 @@ class ReconcileGenerationJobUseCase:
             return self._generation_job_repository.get_by_id(job.id) or job
 
         result = self._generation_provider.result(
-            endpoint_id=profile.endpoint_id,
-            provider_request_id=job.provider_request_id,
             model_key=job.model_key,
+            provider_request_id=job.provider_request_id,
         )
         if (
             result.status == 'SUCCEEDED'

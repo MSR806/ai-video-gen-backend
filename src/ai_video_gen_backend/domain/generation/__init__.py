@@ -1,3 +1,4 @@
+from .downloader import MediaDownloaderPort, MediaDownloadError
 from .entities import (
     GenerationJob,
     GenerationOperation,
@@ -17,6 +18,8 @@ __all__ = [
     'GenerationProviderPort',
     'GenerationRequest',
     'GenerationStatus',
+    'MediaDownloadError',
+    'MediaDownloaderPort',
     'ProviderResult',
     'ProviderStatus',
     'ProviderSubmission',

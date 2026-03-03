@@ -12,6 +12,7 @@ from ai_video_gen_backend.domain.collection_item import (
     CollectionItemCreationPayload,
     CollectionItemGenerationParams,
     GeneratedCollectionItem,
+    JsonValue,
     MediaType,
     StorageError,
     StoredObject,
@@ -40,6 +41,40 @@ class FakeCollectionItemRepository:
         self.deleted_ids.append(item_id)
         del self._items[item_id]
         return True
+
+    def assign_job_id(self, *, item_id: UUID, job_id: UUID) -> CollectionItem | None:
+        del item_id, job_id
+        return None
+
+    def mark_generated_item_ready(
+        self,
+        *,
+        item_id: UUID,
+        url: str,
+        metadata: dict[str, JsonValue],
+        storage_provider: str | None,
+        storage_bucket: str | None,
+        storage_key: str | None,
+        mime_type: str | None,
+        size_bytes: int | None,
+    ) -> CollectionItem | None:
+        del (
+            item_id,
+            url,
+            metadata,
+            storage_provider,
+            storage_bucket,
+            storage_key,
+            mime_type,
+            size_bytes,
+        )
+        return None
+
+    def mark_generated_item_failed(
+        self, *, item_id: UUID, error_message: str
+    ) -> CollectionItem | None:
+        del item_id, error_message
+        return None
 
     def generate_item(self, params: CollectionItemGenerationParams) -> GeneratedCollectionItem:
         del params

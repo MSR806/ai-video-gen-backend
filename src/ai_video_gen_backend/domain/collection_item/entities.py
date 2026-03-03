@@ -5,8 +5,9 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-JsonValue = object
-JsonObject = dict[str, JsonValue]
+from ai_video_gen_backend.domain.types import JsonObject, JsonValue
+
+__all__ = ['JsonObject', 'JsonValue']
 
 MediaType = Literal['image', 'video']
 CollectionItemStatus = Literal['GENERATING', 'READY', 'FAILED']

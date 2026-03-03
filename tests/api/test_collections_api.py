@@ -13,6 +13,7 @@ from ai_video_gen_backend.domain.collection_item import (
     VideoThumbnailGenerationError,
 )
 from ai_video_gen_backend.domain.generation import (
+    GenerationOperation,
     GenerationRequest,
     ProviderResult,
     ProviderStatus,
@@ -21,6 +22,7 @@ from ai_video_gen_backend.domain.generation import (
 )
 from ai_video_gen_backend.presentation.api.dependencies import (
     get_generation_provider,
+    get_media_downloader,
     get_object_storage,
     get_video_thumbnail_generator,
 )
@@ -70,11 +72,21 @@ class FakeVideoThumbnailGenerator:
         return b'thumbnail-jpeg'
 
 
+class FakeMediaDownloader:
+    def download(self, url: str, *, max_bytes: int) -> tuple[bytes, str]:
+        del max_bytes
+        return b'fake-downloaded-content', 'image/png'
+
+
 class FakeGenerationProvider:
     def __init__(self) -> None:
         self._request_counter = 0
         self._statuses: dict[str, ProviderStatus] = {}
         self._results: dict[str, ProviderResult] = {}
+
+    def resolve_model_key(self, *, operation: GenerationOperation, model_key: str | None) -> str:
+        del operation
+        return model_key or 'nano_banana_t2i_v1'
 
     def submit(self, request: GenerationRequest, *, webhook_url: str) -> ProviderSubmission:
         del request, webhook_url
@@ -89,22 +101,21 @@ class FakeGenerationProvider:
         )
         return ProviderSubmission(provider_request_id=request_id)
 
-    def status(self, *, endpoint_id: str, provider_request_id: str) -> ProviderStatus:
-        del endpoint_id
+    def status(self, *, model_key: str, provider_request_id: str) -> ProviderStatus:
+        del model_key
         return self._statuses.get(provider_request_id, ProviderStatus(status='FAILED'))
 
     def result(
         self,
         *,
-        endpoint_id: str,
+        model_key: str,
         provider_request_id: str,
-        model_key: str | None = None,
     ) -> ProviderResult:
-        del endpoint_id, model_key
+        del model_key
         return self._results[provider_request_id]
 
-    def cancel(self, *, endpoint_id: str, provider_request_id: str) -> None:
-        del endpoint_id
+    def cancel(self, *, model_key: str, provider_request_id: str) -> None:
+        del model_key
         self._statuses[provider_request_id] = ProviderStatus(status='CANCELLED')
 
     def parse_webhook(self, payload: dict[str, object]) -> ProviderWebhookEvent | None:
@@ -143,9 +154,16 @@ def _override_upload_dependencies(
 def _override_generation_dependency(
     client: TestClient,
     provider: FakeGenerationProvider,
+    *,
+    storage: FakeObjectStorage | None = None,
+    media_downloader: FakeMediaDownloader | None = None,
 ) -> FastAPI:
     app = cast(FastAPI, client.app)
     app.dependency_overrides[get_generation_provider] = lambda: provider
+    if storage is not None:
+        app.dependency_overrides[get_object_storage] = lambda: storage
+    if media_downloader is not None:
+        app.dependency_overrides[get_media_downloader] = lambda: media_downloader
     return app
 
 
@@ -328,7 +346,11 @@ def test_generation_webhook_invalid_token_returns_401(
 ) -> None:
     ids = seed_baseline_data(db_session)
     fake_provider = FakeGenerationProvider()
-    app = _override_generation_dependency(client, fake_provider)
+    app = _override_generation_dependency(
+        client,
+        fake_provider,
+        media_downloader=FakeMediaDownloader(),
+    )
 
     try:
         submit = client.post(
@@ -346,6 +368,7 @@ def test_generation_webhook_invalid_token_returns_401(
         )
     finally:
         app.dependency_overrides.pop(get_generation_provider, None)
+        app.dependency_overrides.pop(get_media_downloader, None)
 
     assert response.status_code == 401
     assert response.json()['error']['code'] == 'unauthorized_webhook'
@@ -357,7 +380,11 @@ def test_generation_webhook_failure_marks_placeholder_item_failed(
 ) -> None:
     ids = seed_baseline_data(db_session)
     fake_provider = FakeGenerationProvider()
-    app = _override_generation_dependency(client, fake_provider)
+    app = _override_generation_dependency(
+        client,
+        fake_provider,
+        media_downloader=FakeMediaDownloader(),
+    )
 
     try:
         submit = client.post(
@@ -377,6 +404,7 @@ def test_generation_webhook_failure_marks_placeholder_item_failed(
         )
     finally:
         app.dependency_overrides.pop(get_generation_provider, None)
+        app.dependency_overrides.pop(get_media_downloader, None)
 
     assert webhook.status_code == 200
     assert webhook.json()['handled'] is True

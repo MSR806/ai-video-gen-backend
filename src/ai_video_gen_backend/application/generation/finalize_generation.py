@@ -3,11 +3,17 @@ from __future__ import annotations
 from io import BytesIO
 from uuid import UUID
 
-import httpx
-
-from ai_video_gen_backend.domain.collection_item import JsonObject, ObjectStoragePort, StorageError
-from ai_video_gen_backend.domain.generation import GenerationJobRepositoryPort
-from ai_video_gen_backend.infrastructure.repositories import CollectionItemSqlRepository
+from ai_video_gen_backend.domain.collection_item import (
+    CollectionItemRepositoryPort,
+    ObjectStoragePort,
+    StorageError,
+)
+from ai_video_gen_backend.domain.generation import (
+    GenerationJobRepositoryPort,
+    MediaDownloaderPort,
+    MediaDownloadError,
+)
+from ai_video_gen_backend.domain.types import JsonObject
 
 
 class GenerationFinalizationError(Exception):
@@ -18,14 +24,16 @@ class GenerationFinalizer:
     def __init__(
         self,
         *,
-        collection_item_repository: CollectionItemSqlRepository,
+        collection_item_repository: CollectionItemRepositoryPort,
         generation_job_repository: GenerationJobRepositoryPort,
         object_storage: ObjectStoragePort,
+        media_downloader: MediaDownloaderPort,
         max_download_bytes: int,
     ) -> None:
         self._collection_item_repository = collection_item_repository
         self._generation_job_repository = generation_job_repository
         self._object_storage = object_storage
+        self._media_downloader = media_downloader
         self._max_download_bytes = max_download_bytes
 
     def finalize_success(
@@ -36,7 +44,13 @@ class GenerationFinalizer:
         output_url: str,
         provider_response: dict[str, object],
     ) -> None:
-        downloaded, content_type = self._download_output(output_url)
+        try:
+            downloaded, content_type = self._media_downloader.download(
+                output_url, max_bytes=self._max_download_bytes
+            )
+        except MediaDownloadError as exc:
+            raise GenerationFinalizationError(str(exc)) from exc
+
         storage_key = self._build_storage_key(item_id=item_id, content_type=content_type)
 
         try:
@@ -97,31 +111,6 @@ class GenerationFinalizer:
             error_message=error_message,
             provider_response=provider_response,
         )
-
-    def _download_output(self, output_url: str) -> tuple[bytes, str]:
-        downloaded = bytearray()
-        content_type = 'image/png'
-
-        try:
-            with (
-                httpx.Client(timeout=20.0, follow_redirects=True) as client,
-                client.stream('GET', output_url) as response,
-            ):
-                response.raise_for_status()
-                header_content_type = response.headers.get('Content-Type')
-                if isinstance(header_content_type, str) and len(header_content_type.strip()) > 0:
-                    content_type = header_content_type.split(';', maxsplit=1)[0].strip()
-
-                for chunk in response.iter_bytes(chunk_size=65536):
-                    downloaded.extend(chunk)
-                    if len(downloaded) > self._max_download_bytes:
-                        raise GenerationFinalizationError(
-                            'Generated output exceeds configured download size limit'
-                        )
-        except httpx.HTTPError as exc:
-            raise GenerationFinalizationError('Failed to download generated output') from exc
-
-        return bytes(downloaded), content_type
 
     def _build_storage_key(self, *, item_id: UUID, content_type: str) -> str:
         extension = self._format_from_content_type(content_type)

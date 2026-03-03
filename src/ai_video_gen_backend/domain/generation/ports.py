@@ -5,6 +5,7 @@ from uuid import UUID
 
 from .entities import (
     GenerationJob,
+    GenerationOperation,
     GenerationRequest,
     ProviderResult,
     ProviderStatus,
@@ -14,19 +15,22 @@ from .entities import (
 
 
 class GenerationProviderPort(Protocol):
+    def resolve_model_key(
+        self, *, operation: GenerationOperation, model_key: str | None
+    ) -> str: ...
+
     def submit(self, request: GenerationRequest, *, webhook_url: str) -> ProviderSubmission: ...
 
-    def status(self, *, endpoint_id: str, provider_request_id: str) -> ProviderStatus: ...
+    def status(self, *, model_key: str, provider_request_id: str) -> ProviderStatus: ...
 
     def result(
         self,
         *,
-        endpoint_id: str,
+        model_key: str,
         provider_request_id: str,
-        model_key: str | None = None,
     ) -> ProviderResult: ...
 
-    def cancel(self, *, endpoint_id: str, provider_request_id: str) -> None: ...
+    def cancel(self, *, model_key: str, provider_request_id: str) -> None: ...
 
     def parse_webhook(self, payload: dict[str, object]) -> ProviderWebhookEvent | None: ...
 

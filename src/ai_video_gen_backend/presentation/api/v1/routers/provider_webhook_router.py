@@ -10,7 +10,7 @@ from ai_video_gen_backend.application.generation import (
 )
 from ai_video_gen_backend.config.settings import Settings
 from ai_video_gen_backend.domain.collection_item import ObjectStoragePort
-from ai_video_gen_backend.domain.generation import GenerationProviderPort
+from ai_video_gen_backend.domain.generation import GenerationProviderPort, MediaDownloaderPort
 from ai_video_gen_backend.infrastructure.repositories import (
     CollectionItemSqlRepository,
     GenerationJobSqlRepository,
@@ -19,6 +19,7 @@ from ai_video_gen_backend.presentation.api.dependencies import (
     get_app_settings,
     get_db_session,
     get_generation_provider,
+    get_media_downloader,
     get_object_storage,
 )
 from ai_video_gen_backend.presentation.api.errors import ApiError
@@ -34,6 +35,7 @@ async def handle_fal_webhook(
     settings: Settings = Depends(get_app_settings),
     generation_provider: GenerationProviderPort = Depends(get_generation_provider),
     object_storage: ObjectStoragePort = Depends(get_object_storage),
+    media_downloader: MediaDownloaderPort = Depends(get_media_downloader),
 ) -> dict[str, bool]:
     if token != settings.generation_webhook_token:
         raise ApiError(status_code=401, code='unauthorized_webhook', message='Unauthorized webhook')
@@ -53,6 +55,7 @@ async def handle_fal_webhook(
         collection_item_repository=CollectionItemSqlRepository(session),
         generation_job_repository=generation_job_repository,
         object_storage=object_storage,
+        media_downloader=media_downloader,
         max_download_bytes=settings.generation_result_max_download_mb * 1024 * 1024,
     )
     use_case = HandleFalWebhookUseCase(

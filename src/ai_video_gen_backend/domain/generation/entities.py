@@ -5,8 +5,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-JsonValue = object
-JsonObject = dict[str, JsonValue]
+from ai_video_gen_backend.domain.types import JsonObject
 
 GenerationOperation = Literal['TEXT_TO_IMAGE', 'IMAGE_TO_IMAGE']
 GenerationStatus = Literal['QUEUED', 'IN_PROGRESS', 'SUCCEEDED', 'FAILED', 'CANCELLED']

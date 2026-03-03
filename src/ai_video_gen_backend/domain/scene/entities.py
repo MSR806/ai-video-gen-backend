@@ -4,8 +4,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-JsonValue = object
-JsonObject = dict[str, JsonValue]
+from ai_video_gen_backend.domain.types import JsonObject, JsonValue
+
+__all__ = ['JsonObject', 'JsonValue']
 
 
 @dataclass(frozen=True, slots=True)

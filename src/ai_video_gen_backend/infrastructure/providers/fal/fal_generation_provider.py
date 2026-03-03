@@ -10,6 +10,7 @@ import fal_client
 import httpx
 
 from ai_video_gen_backend.domain.generation import (
+    GenerationOperation,
     GenerationProviderPort,
     GenerationRequest,
     ProviderResult,
@@ -18,9 +19,8 @@ from ai_video_gen_backend.domain.generation import (
     ProviderWebhookEvent,
 )
 from ai_video_gen_backend.infrastructure.providers.fal.model_catalog import (
-    FalModelProfile,
     get_model_profile,
-    get_model_profile_by_endpoint,
+    resolve_model_key,
 )
 from ai_video_gen_backend.infrastructure.providers.fal.model_mapper_registry import (
     get_model_mapper,
@@ -32,6 +32,9 @@ logger = logging.getLogger(__name__)
 class FalGenerationProvider(GenerationProviderPort):
     def __init__(self, *, api_key: str) -> None:
         self._api_key = api_key
+
+    def resolve_model_key(self, *, operation: GenerationOperation, model_key: str | None) -> str:
+        return resolve_model_key(operation=operation, model_key=model_key)
 
     def submit(self, request: GenerationRequest, *, webhook_url: str) -> ProviderSubmission:
         fal_client = self._client()
@@ -66,10 +69,11 @@ class FalGenerationProvider(GenerationProviderPort):
 
         return ProviderSubmission(provider_request_id=request_id)
 
-    def status(self, *, endpoint_id: str, provider_request_id: str) -> ProviderStatus:
+    def status(self, *, model_key: str, provider_request_id: str) -> ProviderStatus:
         fal_client = self._client()
+        profile = get_model_profile(model_key)
         status_response = fal_client.status(
-            endpoint_id,
+            profile.endpoint_id,
             provider_request_id,
             with_logs=False,
         )
@@ -86,14 +90,13 @@ class FalGenerationProvider(GenerationProviderPort):
     def result(
         self,
         *,
-        endpoint_id: str,
+        model_key: str,
         provider_request_id: str,
-        model_key: str | None = None,
     ) -> ProviderResult:
         fal_client = self._client()
-        profile = self._resolve_profile(endpoint_id=endpoint_id, model_key=model_key)
+        profile = get_model_profile(model_key)
         mapper = get_model_mapper(profile.mapper_key)
-        response = fal_client.result(endpoint_id, provider_request_id)
+        response = fal_client.result(profile.endpoint_id, provider_request_id)
         payload = _to_dict(response)
         resolved_payload = _resolve_result_payload(payload)
         output_url = mapper.extract_output_url(resolved_payload)
@@ -113,9 +116,10 @@ class FalGenerationProvider(GenerationProviderPort):
             raw_response=resolved_payload,
         )
 
-    def cancel(self, *, endpoint_id: str, provider_request_id: str) -> None:
+    def cancel(self, *, model_key: str, provider_request_id: str) -> None:
         fal_client = self._client()
-        fal_client.cancel(endpoint_id, provider_request_id)
+        profile = get_model_profile(model_key)
+        fal_client.cancel(profile.endpoint_id, provider_request_id)
 
     def parse_webhook(self, payload: dict[str, object]) -> ProviderWebhookEvent | None:
         request_id_raw = payload.get('request_id')
@@ -153,11 +157,6 @@ class FalGenerationProvider(GenerationProviderPort):
         if len(self._api_key.strip()) > 0:
             os.environ['FAL_KEY'] = self._api_key
         return fal_client
-
-    def _resolve_profile(self, *, endpoint_id: str, model_key: str | None) -> FalModelProfile:
-        if model_key is not None:
-            return get_model_profile(model_key)
-        return get_model_profile_by_endpoint(endpoint_id)
 
 
 def _extract_request_id(handler: object) -> str | None:
