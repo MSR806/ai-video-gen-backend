@@ -3,7 +3,11 @@ from .collection_item_schema import (
     CollectionItemResponse,
     CreateCollectionItemRequest,
 )
-from .collection_schema import CollectionResponse, CreateCollectionRequest
+from .collection_schema import (
+    CollectionContentsResponse,
+    CollectionResponse,
+    CreateCollectionRequest,
+)
 from .error_schema import ErrorEnvelope
 from .generation_schema import (
     GenerateCollectionItemRequest,
@@ -18,6 +22,7 @@ from .scene_schema import (
 )
 
 __all__ = [
+    'CollectionContentsResponse',
     'CollectionItemReadResponse',
     'CollectionItemResponse',
     'CollectionResponse',

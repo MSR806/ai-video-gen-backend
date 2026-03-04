@@ -184,6 +184,132 @@ def test_create_collection_success(client: TestClient, db_session: Session) -> N
     assert payload['name'] == 'New Collection'
     assert payload['tag'] == 'reference'
     assert payload['projectId'] == str(ids['project_id'])
+    assert payload['parentCollectionId'] is None
+
+
+def test_create_child_collection_success(client: TestClient, db_session: Session) -> None:
+    ids = seed_baseline_data(db_session)
+
+    parent_response = client.post(
+        f'/api/v1/projects/{ids["project_id"]}/collections',
+        json={
+            'name': 'Parent Collection',
+            'tag': 'folder',
+            'description': 'Parent node',
+        },
+    )
+    assert parent_response.status_code == 201
+    parent_id = parent_response.json()['id']
+
+    child_response = client.post(
+        f'/api/v1/projects/{ids["project_id"]}/collections',
+        json={
+            'name': 'Child Collection',
+            'tag': 'folder',
+            'description': 'Child node',
+            'parentCollectionId': parent_id,
+        },
+    )
+
+    assert child_response.status_code == 201
+    payload = child_response.json()
+    assert payload['name'] == 'Child Collection'
+    assert payload['parentCollectionId'] == parent_id
+
+    list_response = client.get(f'/api/v1/projects/{ids["project_id"]}/collections')
+    assert list_response.status_code == 200
+    listed = list_response.json()
+    listed_child = next(collection for collection in listed if collection['id'] == payload['id'])
+    assert listed_child['parentCollectionId'] == parent_id
+
+
+def test_create_collection_with_unknown_parent_returns_400(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+
+    response = client.post(
+        f'/api/v1/projects/{ids["project_id"]}/collections',
+        json={
+            'name': 'Child Collection',
+            'tag': 'folder',
+            'description': 'Child node',
+            'parentCollectionId': str(uuid4()),
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()['error']['code'] == 'invalid_parent_collection'
+
+
+def test_create_collection_with_cross_project_parent_returns_400(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+
+    project_b_response = client.post(
+        '/api/v1/projects',
+        json={
+            'name': 'Project B',
+            'description': 'Project for cross-parent validation',
+            'status': 'draft',
+        },
+    )
+    assert project_b_response.status_code == 201
+    project_b_id = project_b_response.json()['id']
+
+    parent_response = client.post(
+        f'/api/v1/projects/{project_b_id}/collections',
+        json={
+            'name': 'Project B Parent',
+            'tag': 'folder',
+            'description': 'Parent in project B',
+        },
+    )
+    assert parent_response.status_code == 201
+    parent_id = parent_response.json()['id']
+
+    response = client.post(
+        f'/api/v1/projects/{ids["project_id"]}/collections',
+        json={
+            'name': 'Invalid Child',
+            'tag': 'folder',
+            'description': 'Should fail',
+            'parentCollectionId': parent_id,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()['error']['code'] == 'invalid_parent_collection'
+
+
+def test_get_collection_items_returns_child_collections(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+
+    child_response = client.post(
+        f'/api/v1/projects/{ids["project_id"]}/collections',
+        json={
+            'name': 'Nested Child',
+            'tag': 'folder',
+            'description': 'Nested child collection',
+            'parentCollectionId': str(ids['collection_id']),
+        },
+    )
+    assert child_response.status_code == 201
+    child_payload = child_response.json()
+
+    response = client.get(f'/api/v1/collections/{ids["collection_id"]}/items')
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload['items']) == 1
+    assert len(payload['childCollections']) == 1
+    assert payload['childCollections'][0]['id'] == child_payload['id']
+    assert payload['childCollections'][0]['parentCollectionId'] == str(ids['collection_id'])
 
 
 def test_get_collection_items_returns_seeded_items(client: TestClient, db_session: Session) -> None:
@@ -193,16 +319,18 @@ def test_get_collection_items_returns_seeded_items(client: TestClient, db_sessio
 
     assert response.status_code == 200
     payload = response.json()
-    assert len(payload) == 1
-    assert payload[0]['name'] == 'Seed Item'
-    assert 'storageProvider' not in payload[0]
-    assert 'storageBucket' not in payload[0]
-    assert 'storageKey' not in payload[0]
-    assert 'mimeType' not in payload[0]
-    assert 'sizeBytes' not in payload[0]
-    assert 'createdAt' not in payload[0]
-    assert 'updatedAt' not in payload[0]
-    assert 'generationSource' not in payload[0]
+    items = payload['items']
+    assert payload['childCollections'] == []
+    assert len(items) == 1
+    assert items[0]['name'] == 'Seed Item'
+    assert 'storageProvider' not in items[0]
+    assert 'storageBucket' not in items[0]
+    assert 'storageKey' not in items[0]
+    assert 'mimeType' not in items[0]
+    assert 'sizeBytes' not in items[0]
+    assert 'createdAt' not in items[0]
+    assert 'updatedAt' not in items[0]
+    assert 'generationSource' not in items[0]
 
 
 def test_get_collection_item_by_id_returns_item(client: TestClient, db_session: Session) -> None:
@@ -262,7 +390,7 @@ def test_delete_collection_item_success(client: TestClient, db_session: Session)
 
     items_response = client.get(f'/api/v1/collections/{ids["collection_id"]}/items')
     assert items_response.status_code == 200
-    assert items_response.json() == []
+    assert items_response.json()['items'] == []
 
 
 def test_delete_collection_item_not_found_returns_404(
@@ -332,7 +460,7 @@ def test_delete_collection_item_storage_failure_returns_502(
 
     items_response = client.get(f'/api/v1/collections/{ids["collection_id"]}/items')
     assert items_response.status_code == 200
-    assert any(item['id'] == item_id for item in items_response.json())
+    assert any(item['id'] == item_id for item in items_response.json()['items'])
 
 
 def test_generate_collection_item_returns_async_job(
@@ -364,7 +492,9 @@ def test_generate_collection_item_returns_async_job(
 
     items_response = client.get(f'/api/v1/collections/{ids["collection_id"]}/items')
     assert items_response.status_code == 200
-    generated_item = next(item for item in items_response.json() if item['id'] == payload['id'])
+    generated_item = next(
+        item for item in items_response.json()['items'] if item['id'] == payload['id']
+    )
     assert generated_item['jobId'] == payload['jobId']
 
 
@@ -446,7 +576,7 @@ def test_generation_webhook_failure_marks_placeholder_item_failed(
 
     items_response = client.get(f'/api/v1/collections/{ids["collection_id"]}/items')
     assert items_response.status_code == 200
-    generated_item = next(item for item in items_response.json() if item['id'] == item_id)
+    generated_item = next(item for item in items_response.json()['items'] if item['id'] == item_id)
     assert generated_item['status'] == 'FAILED'
 
 

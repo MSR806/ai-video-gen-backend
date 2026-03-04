@@ -95,3 +95,77 @@ def test_collection_item_project_collection_consistency_constraint(db_session: S
 
     with pytest.raises(IntegrityError):
         db_session.commit()
+
+
+def test_collection_parent_project_consistency_constraint(db_session: Session) -> None:
+    project_a = uuid4()
+    project_b = uuid4()
+    parent_collection_id = uuid4()
+
+    db_session.add_all(
+        [
+            ProjectModel(
+                id=project_a,
+                name='Project A',
+                description='Project A',
+                status='draft',
+            ),
+            ProjectModel(
+                id=project_b,
+                name='Project B',
+                description='Project B',
+                status='draft',
+            ),
+            CollectionModel(
+                id=parent_collection_id,
+                project_id=project_a,
+                name='Parent Collection',
+                tag='tag',
+                description='Parent collection',
+            ),
+        ]
+    )
+    db_session.commit()
+
+    db_session.add(
+        CollectionModel(
+            id=uuid4(),
+            project_id=project_b,
+            parent_collection_id=parent_collection_id,
+            name='Invalid Child',
+            tag='tag',
+            description='Should fail due to cross-project parent',
+        )
+    )
+
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+
+
+def test_collection_parent_cannot_reference_self_constraint(db_session: Session) -> None:
+    project_id = uuid4()
+    collection_id = uuid4()
+
+    db_session.add(
+        ProjectModel(
+            id=project_id,
+            name='Project',
+            description='Project for self parent constraint',
+            status='draft',
+        )
+    )
+    db_session.commit()
+
+    db_session.add(
+        CollectionModel(
+            id=collection_id,
+            project_id=project_id,
+            parent_collection_id=collection_id,
+            name='Self Parent',
+            tag='tag',
+            description='Should fail due to self parent reference',
+        )
+    )
+
+    with pytest.raises(IntegrityError):
+        db_session.commit()

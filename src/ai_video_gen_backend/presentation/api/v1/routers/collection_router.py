@@ -9,7 +9,10 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ai_video_gen_backend.application.collection import GetCollectionByIdUseCase
+from ai_video_gen_backend.application.collection import (
+    GetChildCollectionsUseCase,
+    GetCollectionByIdUseCase,
+)
 from ai_video_gen_backend.application.collection_item import (
     CreateCollectionItemUseCase,
     DeleteCollectionItemUseCase,
@@ -47,6 +50,7 @@ from ai_video_gen_backend.presentation.api.dependencies import (
 )
 from ai_video_gen_backend.presentation.api.errors import ApiError
 from ai_video_gen_backend.presentation.api.v1.schemas import (
+    CollectionContentsResponse,
     CollectionItemReadResponse,
     CollectionItemResponse,
     CollectionResponse,
@@ -69,20 +73,27 @@ def get_collection(
     return CollectionResponse.from_domain(collection)
 
 
-@router.get('/collections/{collection_id}/items', response_model=list[CollectionItemReadResponse])
+@router.get('/collections/{collection_id}/items', response_model=CollectionContentsResponse)
 def get_collection_items(
     collection_id: UUID,
     session: Session = Depends(get_db_session),
-) -> list[CollectionItemReadResponse]:
+) -> CollectionContentsResponse:
     collection_use_case = GetCollectionByIdUseCase(CollectionSqlRepository(session))
     if collection_use_case.execute(collection_id) is None:
         raise ApiError(status_code=404, code='collection_not_found', message='Collection not found')
 
     items_use_case = GetCollectionItemsUseCase(CollectionItemSqlRepository(session))
-    return [
-        CollectionItemReadResponse.from_domain(item)
-        for item in items_use_case.execute(collection_id)
-    ]
+    child_collections_use_case = GetChildCollectionsUseCase(CollectionSqlRepository(session))
+    return CollectionContentsResponse(
+        items=[
+            CollectionItemReadResponse.from_domain(item)
+            for item in items_use_case.execute(collection_id)
+        ],
+        child_collections=[
+            CollectionResponse.from_domain(collection)
+            for collection in child_collections_use_case.execute(collection_id)
+        ],
+    )
 
 
 @router.get('/collection-items/{item_id}', response_model=CollectionItemReadResponse)

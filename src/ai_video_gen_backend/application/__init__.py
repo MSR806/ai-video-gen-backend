@@ -1,5 +1,6 @@
 from .collection import (
     CreateCollectionUseCase,
+    GetChildCollectionsUseCase,
     GetCollectionByIdUseCase,
     GetProjectCollectionsUseCase,
 )
@@ -39,6 +40,7 @@ __all__ = [
     'GenerationFinalizationError',
     'GenerationFinalizer',
     'GetAllProjectsUseCase',
+    'GetChildCollectionsUseCase',
     'GetCollectionByIdUseCase',
     'GetCollectionItemsUseCase',
     'GetGenerationJobUseCase',

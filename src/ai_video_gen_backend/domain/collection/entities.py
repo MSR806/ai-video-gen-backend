@@ -9,6 +9,7 @@ from uuid import UUID
 class Collection:
     id: UUID
     project_id: UUID
+    parent_collection_id: UUID | None
     name: str
     tag: str
     description: str
@@ -22,3 +23,4 @@ class CollectionCreationPayload:
     name: str
     tag: str
     description: str
+    parent_collection_id: UUID | None = None

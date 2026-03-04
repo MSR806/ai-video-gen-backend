@@ -22,6 +22,15 @@ class CollectionSqlRepository:
         records = self._session.execute(stmt).scalars().all()
         return [self._to_domain(record) for record in records]
 
+    def get_child_collections(self, parent_collection_id: UUID) -> list[Collection]:
+        stmt = (
+            select(CollectionModel)
+            .where(CollectionModel.parent_collection_id == parent_collection_id)
+            .order_by(CollectionModel.created_at.asc())
+        )
+        records = self._session.execute(stmt).scalars().all()
+        return [self._to_domain(record) for record in records]
+
     def get_collection_by_id(self, collection_id: UUID) -> Collection | None:
         stmt = select(CollectionModel).where(CollectionModel.id == collection_id)
         record = self._session.execute(stmt).scalar_one_or_none()
@@ -30,6 +39,7 @@ class CollectionSqlRepository:
     def create_collection(self, payload: CollectionCreationPayload) -> Collection:
         model = CollectionModel(
             project_id=payload.project_id,
+            parent_collection_id=payload.parent_collection_id,
             name=payload.name,
             tag=payload.tag,
             description=payload.description,
@@ -43,6 +53,7 @@ class CollectionSqlRepository:
         return Collection(
             id=model.id,
             project_id=model.project_id,
+            parent_collection_id=model.parent_collection_id,
             name=model.name,
             tag=model.tag,
             description=model.description,

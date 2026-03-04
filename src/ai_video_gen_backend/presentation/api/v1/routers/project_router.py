@@ -93,13 +93,24 @@ def create_project_collection(
     if project_use_case.execute(project_id) is None:
         raise ApiError(status_code=404, code='project_not_found', message='Project not found')
 
-    use_case = CreateCollectionUseCase(CollectionSqlRepository(session))
+    collection_repository = CollectionSqlRepository(session)
+    if request.parent_collection_id is not None:
+        parent_collection = collection_repository.get_collection_by_id(request.parent_collection_id)
+        if parent_collection is None or parent_collection.project_id != project_id:
+            raise ApiError(
+                status_code=400,
+                code='invalid_parent_collection',
+                message='Parent collection must exist in the same project',
+            )
+
+    use_case = CreateCollectionUseCase(collection_repository)
     collection = use_case.execute(
         CollectionCreationPayload(
             project_id=project_id,
             name=request.name,
             tag=request.tag,
             description=request.description,
+            parent_collection_id=request.parent_collection_id,
         )
     )
     return CollectionResponse.from_domain(collection)

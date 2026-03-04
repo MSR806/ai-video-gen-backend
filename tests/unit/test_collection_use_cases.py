@@ -20,6 +20,13 @@ class FakeCollectionRepository:
             collection for collection in self.collections if collection.project_id == project_id
         ]
 
+    def get_child_collections(self, parent_collection_id: UUID) -> list[Collection]:
+        return [
+            collection
+            for collection in self.collections
+            if collection.parent_collection_id == parent_collection_id
+        ]
+
     def get_collection_by_id(self, collection_id: UUID) -> Collection | None:
         return next(
             (collection for collection in self.collections if collection.id == collection_id),
@@ -31,6 +38,7 @@ class FakeCollectionRepository:
         collection = Collection(
             id=uuid4(),
             project_id=payload.project_id,
+            parent_collection_id=payload.parent_collection_id,
             name=payload.name,
             tag=payload.tag,
             description=payload.description,
@@ -46,6 +54,7 @@ def _collection_fixture(collection_id: UUID, project_id: UUID, name: str) -> Col
     return Collection(
         id=collection_id,
         project_id=project_id,
+        parent_collection_id=None,
         name=name,
         tag='reference',
         description='Fixture collection',
@@ -94,10 +103,12 @@ def test_create_collection_use_case_creates_collection() -> None:
             name='New Collection',
             tag='characters',
             description='Contains character references',
+            parent_collection_id=None,
         )
     )
 
     assert result.name == 'New Collection'
     assert result.tag == 'characters'
     assert result.project_id == project_id
+    assert result.parent_collection_id is None
     assert len(repo.collections) == 1
