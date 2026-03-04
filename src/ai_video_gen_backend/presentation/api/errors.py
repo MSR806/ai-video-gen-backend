@@ -25,6 +25,22 @@ class ApiError(Exception):
         self.details = details
 
 
+def _sanitize_validation_error(value: object) -> object:
+    if isinstance(value, dict):
+        return {key: _sanitize_validation_error(item) for key, item in value.items()}
+
+    if isinstance(value, list):
+        return [_sanitize_validation_error(item) for item in value]
+
+    if isinstance(value, tuple):
+        return [_sanitize_validation_error(item) for item in value]
+
+    if isinstance(value, Exception):
+        return str(value)
+
+    return value
+
+
 def _error_response(
     *,
     status_code: int,
@@ -66,7 +82,7 @@ async def validation_error_handler(_: Request, exc: Exception) -> JSONResponse:
         status_code=422,
         code='validation_error',
         message='Request validation failed',
-        details={'errors': exc.errors()},
+        details={'errors': _sanitize_validation_error(exc.errors())},
     )
 
 

@@ -83,13 +83,15 @@ class FakeGenerationProvider:
         self._request_counter = 0
         self._statuses: dict[str, ProviderStatus] = {}
         self._results: dict[str, ProviderResult] = {}
+        self.submitted_requests: list[GenerationRequest] = []
 
     def resolve_model_key(self, *, operation: GenerationOperation, model_key: str | None) -> str:
         del operation
         return model_key or 'nano_banana_t2i_v1'
 
     def submit(self, request: GenerationRequest, *, webhook_url: str) -> ProviderSubmission:
-        del request, webhook_url
+        del webhook_url
+        self.submitted_requests.append(request)
         self._request_counter += 1
         request_id = f'req-{self._request_counter}'
         self._statuses[request_id] = ProviderStatus(status='IN_PROGRESS')
@@ -496,6 +498,77 @@ def test_generate_collection_item_returns_async_job(
         item for item in items_response.json()['items'] if item['id'] == payload['id']
     )
     assert generated_item['jobId'] == payload['jobId']
+
+
+def test_generate_collection_item_image_to_image_accepts_multiple_source_urls(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+    fake_provider = FakeGenerationProvider()
+    app = _override_generation_dependency(client, fake_provider)
+
+    source_urls = [
+        'https://example.com/source-a.png',
+        'https://example.com/source-b.png',
+    ]
+
+    try:
+        response = client.post(
+            f'/api/v1/collections/{ids["collection_id"]}/items/generate',
+            json={
+                'projectId': str(ids['project_id']),
+                'operation': 'IMAGE_TO_IMAGE',
+                'prompt': 'Edit with two references',
+                'sourceImageUrls': source_urls,
+                'aspectRatio': 'SQUARE',
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_generation_provider, None)
+
+    assert response.status_code == 202
+    assert fake_provider.submitted_requests[-1].source_image_urls == source_urls
+
+
+def test_generate_collection_item_image_to_image_requires_non_empty_source_urls(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+
+    response = client.post(
+        f'/api/v1/collections/{ids["collection_id"]}/items/generate',
+        json={
+            'projectId': str(ids['project_id']),
+            'operation': 'IMAGE_TO_IMAGE',
+            'prompt': 'Edit request',
+            'sourceImageUrls': [],
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()['error']['code'] == 'validation_error'
+
+
+def test_generate_collection_item_text_to_image_rejects_source_urls(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+
+    response = client.post(
+        f'/api/v1/collections/{ids["collection_id"]}/items/generate',
+        json={
+            'projectId': str(ids['project_id']),
+            'operation': 'TEXT_TO_IMAGE',
+            'prompt': 'Should fail',
+            'sourceImageUrls': ['https://example.com/source.png'],
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()['error']['code'] == 'validation_error'
 
 
 def test_get_generation_job_returns_404_when_missing(client: TestClient) -> None:

@@ -118,10 +118,10 @@ class SubmitGenerationJobUseCase:
             raise InvalidGenerationRequestError('text_to_image does not accept sourceImageUrls')
 
         if request.operation == 'IMAGE_TO_IMAGE' and (
-            request.source_image_urls is None or len(request.source_image_urls) != 1
+            request.source_image_urls is None or len(request.source_image_urls) < 1
         ):
             raise InvalidGenerationRequestError(
-                'image_to_image requires exactly one source image URL'
+                'image_to_image requires at least one source image URL'
             )
 
     def _item_name(self, prompt: str) -> str:

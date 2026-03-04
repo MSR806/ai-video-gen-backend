@@ -25,9 +25,9 @@ class GenerateCollectionItemRequest(StrictSchema):
     @model_validator(mode='after')
     def validate_operation_payload(self) -> GenerateCollectionItemRequest:
         if self.operation == 'IMAGE_TO_IMAGE' and (
-            self.source_image_urls is None or len(self.source_image_urls) != 1
+            self.source_image_urls is None or len(self.source_image_urls) < 1
         ):
-            raise ValueError('image_to_image requires exactly one source image URL')
+            raise ValueError('image_to_image requires at least one source image URL')
 
         if self.operation == 'TEXT_TO_IMAGE' and self.source_image_urls not in (None, []):
             raise ValueError('text_to_image does not accept sourceImageUrls')

@@ -48,6 +48,28 @@ def test_nano_banana_mapper_builds_image_to_image_arguments() -> None:
     assert arguments['image_urls'] == ['https://example.com/source.png']
 
 
+def test_nano_banana_mapper_preserves_multiple_source_urls() -> None:
+    mapper = NanoBananaMapper()
+    source_urls = [
+        'https://example.com/source-1.png',
+        'https://example.com/source-2.png',
+    ]
+    request = GenerationRequest(
+        project_id=uuid4(),
+        collection_id=uuid4(),
+        operation='IMAGE_TO_IMAGE',
+        prompt='edit this',
+        source_image_urls=source_urls,
+        model_key='nano_banana_i2i_v1',
+        aspect_ratio='PORTRAIT',
+    )
+
+    arguments = mapper.to_arguments(request)
+
+    assert arguments['aspect_ratio'] == '9:16'
+    assert arguments['image_urls'] == source_urls
+
+
 def test_nano_banana_mapper_requires_source_image_for_image_to_image() -> None:
     mapper = NanoBananaMapper()
     request = GenerationRequest(
