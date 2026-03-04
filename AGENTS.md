@@ -107,3 +107,23 @@ uv run pytest -q
 - `pytest` must pass all tests with no failures or errors.
 
 Commit messages must follow Conventional Commits (`feat:`, `fix:`, `refactor:`, `test:`, etc.), enforced by `gitlint` in the `commit-msg` hook. Pre-commit hooks must pass before push.
+
+## Git Commit Guidelines (Mandatory)
+
+1. Commit flow:
+- Run commits from this repo root only (`ai-video-gen-backend`).
+- Activate environment first: `source .venv/bin/activate`.
+- Run: `uv run pre-commit run --all-files` before `git commit`.
+
+2. If hook tooling is missing:
+- Run `uv sync --extra dev`.
+- Rerun `uv run pre-commit run --all-files`.
+- Commit only after hooks and checks pass.
+
+3. Hook policy:
+- Do not use `git commit --no-verify` unless the user explicitly instructs it.
+- Treat hook failures as blockers and fix them before commit.
+
+4. Commit message policy:
+- Use Conventional Commit format.
+- Keep message aligned with actual diff scope.
