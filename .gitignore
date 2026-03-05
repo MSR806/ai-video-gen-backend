@@ -5,7 +5,9 @@
 
 # Python caches / artifacts
 __pycache__/
+**/__pycache__/
 *.py[cod]
+**/*.py[cod]
 *.pyo
 *.pyd
 *.so
