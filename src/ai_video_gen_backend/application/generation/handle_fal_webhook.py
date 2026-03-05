@@ -5,9 +5,11 @@ from ai_video_gen_backend.application.generation.finalize_generation import (
     GenerationFinalizer,
 )
 from ai_video_gen_backend.domain.generation import (
+    GeneratedOutput,
     GenerationJobRepositoryPort,
     GenerationProviderPort,
 )
+from ai_video_gen_backend.domain.types import JsonObject
 
 
 class HandleFalWebhookUseCase:
@@ -37,17 +39,21 @@ class HandleFalWebhookUseCase:
             raise GenerationFinalizationError('Generation job has no linked collection item')
 
         if event.status == 'SUCCEEDED':
-            output_url = event.output_url
-            provider_response = event.raw_response
+            outputs_json = [_output_to_json(output) for output in event.outputs]
+            provider_response_json = event.raw_response
 
-            if output_url is None and job.provider_request_id is not None:
+            if (
+                len(outputs_json) == 0
+                and job.provider_request_id is not None
+                and job.endpoint_id is not None
+            ):
                 result = self._generation_provider.result(
-                    model_key=job.model_key,
+                    endpoint_id=job.endpoint_id,
                     provider_request_id=job.provider_request_id,
                 )
-                provider_response = result.raw_response
+                provider_response_json = result.raw_response
                 if result.status == 'SUCCEEDED':
-                    output_url = result.output_url
+                    outputs_json = [_output_to_json(output) for output in result.outputs]
                 else:
                     error_message = result.error_message or 'Generation failed'
                     self._generation_finalizer.finalize_failure(
@@ -55,16 +61,17 @@ class HandleFalWebhookUseCase:
                         item_id=job.collection_item_id,
                         error_code='provider_generation_failed',
                         error_message=error_message,
-                        provider_response=provider_response,
+                        provider_response_json=provider_response_json,
                     )
                     return True
 
-            if output_url is not None:
+            if len(outputs_json) > 0:
                 self._generation_finalizer.finalize_success(
                     job_id=job.id,
                     item_id=job.collection_item_id,
-                    output_url=output_url,
-                    provider_response=provider_response,
+                    output=outputs_json[0],
+                    provider_response_json=provider_response_json,
+                    outputs_json=outputs_json,
                 )
                 return True
 
@@ -73,7 +80,7 @@ class HandleFalWebhookUseCase:
                 item_id=job.collection_item_id,
                 error_code='provider_generation_failed',
                 error_message='Provider reported success without output URL',
-                provider_response=provider_response,
+                provider_response_json=provider_response_json,
             )
             return True
 
@@ -83,6 +90,16 @@ class HandleFalWebhookUseCase:
             item_id=job.collection_item_id,
             error_code='provider_generation_failed',
             error_message=error_message,
-            provider_response=event.raw_response,
+            provider_response_json=event.raw_response,
         )
         return True
+
+
+def _output_to_json(output: GeneratedOutput) -> JsonObject:
+    return {
+        'index': output.index,
+        'media_type': output.media_type,
+        'provider_url': output.provider_url,
+        'stored_url': None,
+        'metadata': dict(output.metadata),
+    }

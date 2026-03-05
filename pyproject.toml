@@ -15,6 +15,7 @@ dependencies = [
   "fal-client>=0.13,<0.14",
   "fastapi>=0.116.1",
   "httpx>=0.28.1",
+  "jsonschema>=4.25.1",
   "pydantic>=2.11.9",
   "pydantic-settings>=2.10.1",
   "python-multipart>=0.0.20",
@@ -67,6 +68,10 @@ ignore_errors = true
 
 [[tool.mypy.overrides]]
 module = ["boto3", "boto3.*", "botocore", "botocore.*", "s3transfer.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["jsonschema", "jsonschema.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

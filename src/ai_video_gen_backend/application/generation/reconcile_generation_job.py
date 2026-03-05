@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from ai_video_gen_backend.application.generation.finalize_generation import GenerationFinalizer
 from ai_video_gen_backend.domain.generation import (
+    GeneratedOutput,
     GenerationJob,
     GenerationJobRepositoryPort,
     GenerationProviderPort,
 )
+from ai_video_gen_backend.domain.types import JsonObject
 
 
 class ReconcileGenerationJobUseCase:
@@ -26,8 +28,11 @@ class ReconcileGenerationJobUseCase:
         if job.provider_request_id is None:
             return job
 
+        if job.endpoint_id is None:
+            return job
+
         provider_status = self._generation_provider.status(
-            model_key=job.model_key,
+            endpoint_id=job.endpoint_id,
             provider_request_id=job.provider_request_id,
         )
 
@@ -45,19 +50,21 @@ class ReconcileGenerationJobUseCase:
             return self._generation_job_repository.get_by_id(job.id) or job
 
         result = self._generation_provider.result(
-            model_key=job.model_key,
+            endpoint_id=job.endpoint_id,
             provider_request_id=job.provider_request_id,
         )
+        outputs_json = [_output_to_json(output) for output in result.outputs]
         if (
             result.status == 'SUCCEEDED'
-            and result.output_url is not None
+            and len(outputs_json) > 0
             and job.collection_item_id is not None
         ):
             self._generation_finalizer.finalize_success(
                 job_id=job.id,
                 item_id=job.collection_item_id,
-                output_url=result.output_url,
-                provider_response=result.raw_response,
+                output=outputs_json[0],
+                provider_response_json=result.raw_response,
+                outputs_json=outputs_json,
             )
             refreshed = self._generation_job_repository.get_by_id(job.id)
             return refreshed if refreshed is not None else job
@@ -68,8 +75,18 @@ class ReconcileGenerationJobUseCase:
                 item_id=job.collection_item_id,
                 error_code='provider_generation_failed',
                 error_message=result.error_message or 'Generation failed on provider',
-                provider_response=result.raw_response,
+                provider_response_json=result.raw_response,
             )
 
         refreshed = self._generation_job_repository.get_by_id(job.id)
         return refreshed if refreshed is not None else job
+
+
+def _output_to_json(output: GeneratedOutput) -> JsonObject:
+    return {
+        'index': output.index,
+        'media_type': output.media_type,
+        'provider_url': output.provider_url,
+        'stored_url': None,
+        'metadata': dict(output.metadata),
+    }

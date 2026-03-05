@@ -1,18 +1,28 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from functools import lru_cache
 
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from ai_video_gen_backend.application.generation import GenerationInputValidator
 from ai_video_gen_backend.config.settings import Settings, get_settings
 from ai_video_gen_backend.domain.collection_item import (
     ObjectStoragePort,
     VideoThumbnailGeneratorPort,
 )
-from ai_video_gen_backend.domain.generation import GenerationProviderPort, MediaDownloaderPort
+from ai_video_gen_backend.domain.generation import (
+    GenerationCapabilityRegistryPort,
+    GenerationProviderPort,
+    MediaDownloaderPort,
+)
 from ai_video_gen_backend.infrastructure.db.session import get_session_factory
 from ai_video_gen_backend.infrastructure.providers import FalGenerationProvider, HttpMediaDownloader
+from ai_video_gen_backend.infrastructure.providers.fal import (
+    FalGenerationModelRegistry,
+    ModelRegistryLoader,
+)
 from ai_video_gen_backend.infrastructure.storage import (
     FfmpegVideoThumbnailGenerator,
     S3ObjectStorage,
@@ -58,6 +68,22 @@ def get_generation_provider(
     settings: Settings = Depends(get_app_settings),
 ) -> GenerationProviderPort:
     return FalGenerationProvider(api_key=settings.fal_api_key)
+
+
+@lru_cache(maxsize=1)
+def _cached_generation_registry(ttl_seconds: int) -> GenerationCapabilityRegistryPort:
+    loader = ModelRegistryLoader(ttl_seconds=ttl_seconds)
+    return FalGenerationModelRegistry(loader)
+
+
+def get_generation_capability_registry(
+    settings: Settings = Depends(get_app_settings),
+) -> GenerationCapabilityRegistryPort:
+    return _cached_generation_registry(settings.generation_registry_cache_ttl_seconds)
+
+
+def get_generation_input_validator() -> GenerationInputValidator:
+    return GenerationInputValidator()
 
 
 def get_media_downloader() -> MediaDownloaderPort:

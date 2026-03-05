@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     generation_webhook_token: str = ''
     generation_status_reconcile_after_seconds: int = 2
     generation_result_max_download_mb: int = 25
+    generation_registry_cache_ttl_seconds: int = 300
 
     model_config = SettingsConfigDict(
         env_file=('.env', '.env.local'),

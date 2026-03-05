@@ -55,13 +55,25 @@ def test_generation_job_repository_lifecycle(db_session: Session) -> None:
         project_id=project_id,
         collection_id=collection_id,
         collection_item_id=item_id,
-        operation='TEXT_TO_IMAGE',
+        operation_key='text_to_image',
         provider='fal',
-        model_key='nano_banana_t2i_v1',
-        request_payload={'prompt': 'cat'},
+        model_key='nano_banana',
+        endpoint_id='fal-ai/nano-banana',
+        inputs_json={'prompt': 'cat'},
+        idempotency_key='idem-1',
     )
 
     assert created.status == 'QUEUED'
+    assert created.operation_key == 'text_to_image'
+    assert created.endpoint_id == 'fal-ai/nano-banana'
+
+    fetched_by_idempotency = repository.get_by_idempotency_key(
+        project_id=project_id,
+        collection_id=collection_id,
+        idempotency_key='idem-1',
+    )
+    assert fetched_by_idempotency is not None
+    assert fetched_by_idempotency.id == created.id
 
     submitted = repository.mark_submitted(
         created.id,
@@ -72,10 +84,20 @@ def test_generation_job_repository_lifecycle(db_session: Session) -> None:
 
     succeeded = repository.mark_succeeded(
         created.id,
-        provider_response={'images': [{'url': 'https://example.com/image.png'}]},
+        provider_response_json={'images': [{'url': 'https://example.com/image.png'}]},
+        outputs_json=[
+            {
+                'index': 0,
+                'media_type': 'image',
+                'provider_url': 'https://example.com/image.png',
+                'stored_url': None,
+                'metadata': {},
+            }
+        ],
     )
     assert succeeded.status == 'SUCCEEDED'
-    assert succeeded.provider_response is not None
+    assert succeeded.provider_response_json is not None
+    assert len(succeeded.outputs_json) == 1
 
 
 def test_generation_job_repository_marks_failed(db_session: Session) -> None:
@@ -121,10 +143,12 @@ def test_generation_job_repository_marks_failed(db_session: Session) -> None:
         project_id=project_id,
         collection_id=collection_id,
         collection_item_id=item_id,
-        operation='IMAGE_TO_IMAGE',
+        operation_key='image_to_image',
         provider='fal',
-        model_key='nano_banana_i2i_v1',
-        request_payload={'prompt': 'cat'},
+        model_key='nano_banana',
+        endpoint_id='fal-ai/nano-banana/edit',
+        inputs_json={'prompt': 'cat'},
+        idempotency_key=None,
     )
 
     failed = repository.mark_failed(

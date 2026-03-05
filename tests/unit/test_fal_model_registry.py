@@ -1,54 +1,97 @@
 from __future__ import annotations
 
-from uuid import uuid4
+import json
+from pathlib import Path
 
 import pytest
 
-from ai_video_gen_backend.domain.generation import GenerationRequest
-from ai_video_gen_backend.infrastructure.providers.fal.mapper_keys import (
-    NANO_BANANA_IMAGE_MAPPER_KEY,
-)
-from ai_video_gen_backend.infrastructure.providers.fal.model_catalog import (
-    get_model_profile,
-    get_model_profile_by_endpoint,
-    resolve_model_key,
-)
-from ai_video_gen_backend.infrastructure.providers.fal.model_mapper_registry import (
-    get_model_mapper,
+from ai_video_gen_backend.infrastructure.providers.fal.model_registry_loader import (
+    CapabilityRegistryLoadError,
+    FalGenerationModelRegistry,
+    ModelRegistryLoader,
 )
 
 
-def test_catalog_resolves_model_with_mapper_key() -> None:
-    resolved = resolve_model_key(operation='TEXT_TO_IMAGE', model_key=None)
-    profile = get_model_profile(resolved)
+def test_registry_lists_grouped_capabilities() -> None:
+    loader = ModelRegistryLoader(ttl_seconds=300)
+    registry = FalGenerationModelRegistry(loader)
 
-    assert profile.key == 'nano_banana_t2i_v1'
-    assert profile.mapper_key == NANO_BANANA_IMAGE_MAPPER_KEY
+    capabilities = registry.list_capabilities()
 
-
-def test_catalog_resolves_by_endpoint_for_provider_fallback() -> None:
-    profile = get_model_profile_by_endpoint('fal-ai/nano-banana')
-
-    assert profile.key == 'nano_banana_t2i_v1'
-    assert profile.mapper_key == NANO_BANANA_IMAGE_MAPPER_KEY
+    assert len(capabilities.image) == 1
+    assert len(capabilities.video) == 1
+    assert capabilities.image[0].model_key == 'nano_banana'
+    assert capabilities.video[0].model_key == 'veo_3_1'
+    assert capabilities.image[0].operations[0].fields[0].key == 'prompt'
 
 
-def test_mapper_registry_returns_mapper_for_nano_banana() -> None:
-    mapper = get_model_mapper(NANO_BANANA_IMAGE_MAPPER_KEY)
-    request = GenerationRequest(
-        project_id=uuid4(),
-        collection_id=uuid4(),
-        operation='TEXT_TO_IMAGE',
-        prompt='a scenic landscape',
-        aspect_ratio='LANDSCAPE',
-        model_key='nano_banana_t2i_v1',
+def test_registry_resolves_model_operation_pair() -> None:
+    loader = ModelRegistryLoader(ttl_seconds=300)
+    registry = FalGenerationModelRegistry(loader)
+
+    resolved = registry.resolve_operation(model_key='nano_banana', operation_key='image_to_image')
+
+    assert resolved is not None
+    assert resolved.endpoint_id == 'fal-ai/nano-banana/edit'
+    assert resolved.media_type == 'image'
+    assert registry.has_model(model_key='nano_banana') is True
+
+
+def test_registry_ignores_disabled_models(tmp_path: Path) -> None:
+    registry_path = tmp_path / 'registry.json'
+    schema_path = (
+        Path(__file__).resolve().parents[2]
+        / 'src/ai_video_gen_backend/infrastructure/providers/fal/model_registry.schema.json'
     )
 
-    arguments = mapper.to_arguments(request)
-    assert arguments['aspect_ratio'] == '16:9'
-    assert arguments['num_images'] == 1
+    payload = {
+        'models': [
+            {
+                'model_key': 'disabled_model',
+                'display_name': 'Disabled Model',
+                'provider': 'fal',
+                'media_type': 'image',
+                'enabled': False,
+                'operations': [
+                    {
+                        'operation_key': 'text_to_image',
+                        'endpoint_id': 'fal-ai/disabled',
+                        'input_schema': {
+                            'type': 'object',
+                            'properties': {'prompt': {'type': 'string'}},
+                            'required': ['prompt'],
+                            'additionalProperties': False,
+                        },
+                    }
+                ],
+            }
+        ]
+    }
+    registry_path.write_text(json.dumps(payload), encoding='utf-8')
+
+    loader = ModelRegistryLoader(
+        ttl_seconds=300, registry_path=registry_path, schema_path=schema_path
+    )
+    registry = FalGenerationModelRegistry(loader)
+
+    capabilities = registry.list_capabilities()
+
+    assert capabilities.image == []
+    assert capabilities.video == []
+    assert registry.has_model(model_key='disabled_model') is False
 
 
-def test_mapper_registry_rejects_unknown_mapper_key() -> None:
-    with pytest.raises(ValueError):
-        get_model_mapper('UNKNOWN_MAPPER')
+def test_registry_loader_raises_for_invalid_payload(tmp_path: Path) -> None:
+    schema_path = (
+        Path(__file__).resolve().parents[2]
+        / 'src/ai_video_gen_backend/infrastructure/providers/fal/model_registry.schema.json'
+    )
+    registry_path = tmp_path / 'registry.json'
+    registry_path.write_text('{"models":[{"model_key":""}]}', encoding='utf-8')
+
+    loader = ModelRegistryLoader(
+        ttl_seconds=300, registry_path=registry_path, schema_path=schema_path
+    )
+
+    with pytest.raises(CapabilityRegistryLoadError):
+        loader.load()

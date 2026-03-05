@@ -72,6 +72,7 @@ Base path: `/api/v1`
 - `POST /api/v1/collections/{collection_id}/items`
 - `POST /api/v1/collections/{collection_id}/items/upload`
 - `POST /api/v1/collections/{collection_id}/items/generate`
+- `GET /api/v1/generation/capabilities`
 - `GET /api/v1/generation-jobs/{job_id}`
 - `POST /api/v1/provider-webhooks/fal`
 - `DELETE /api/v1/collections/{collection_id}/items/{item_id}`
@@ -89,4 +90,5 @@ nested collection under another collection in the same project.
 `childCollections` (breaking change from prior list-only response).
 
 `POST /api/v1/collections/{collection_id}/items/generate` is asynchronous and returns `202` with
-`jobId` and `itemId`. Use `GET /api/v1/generation-jobs/{job_id}` to track status.
+`jobId`, `status`, `modelKey`, and `operationKey`. Use `GET /api/v1/generation-jobs/{job_id}` to
+track status.

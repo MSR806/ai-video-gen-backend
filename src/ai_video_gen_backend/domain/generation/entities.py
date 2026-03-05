@@ -7,20 +7,17 @@ from uuid import UUID
 
 from ai_video_gen_backend.domain.types import JsonObject
 
-GenerationOperation = Literal['TEXT_TO_IMAGE', 'IMAGE_TO_IMAGE']
 GenerationStatus = Literal['QUEUED', 'IN_PROGRESS', 'SUCCEEDED', 'FAILED', 'CANCELLED']
+OutputMediaType = Literal['image', 'video']
 
 
 @dataclass(frozen=True, slots=True)
 class GenerationRequest:
     project_id: UUID
     collection_id: UUID
-    operation: GenerationOperation
-    prompt: str
-    source_image_urls: list[str] | None = None
-    model_key: str | None = None
-    aspect_ratio: Literal['SQUARE', 'PORTRAIT', 'LANDSCAPE'] = 'LANDSCAPE'
-    seed: int | None = None
+    model_key: str
+    operation_key: str
+    inputs: JsonObject
     idempotency_key: str | None = None
 
 
@@ -30,13 +27,16 @@ class GenerationJob:
     project_id: UUID
     collection_id: UUID
     collection_item_id: UUID | None
-    operation: GenerationOperation
+    operation_key: str
     provider: str
     model_key: str
+    endpoint_id: str | None
     status: GenerationStatus
-    request_payload: JsonObject
+    inputs_json: JsonObject
+    outputs_json: list[JsonObject]
     provider_request_id: str | None
-    provider_response: JsonObject | None
+    provider_response_json: JsonObject | None
+    idempotency_key: str | None
     error_code: str | None
     error_message: str | None
     submitted_at: datetime | None
@@ -56,9 +56,17 @@ class ProviderStatus:
 
 
 @dataclass(frozen=True, slots=True)
+class GeneratedOutput:
+    index: int
+    media_type: OutputMediaType
+    provider_url: str
+    metadata: JsonObject
+
+
+@dataclass(frozen=True, slots=True)
 class ProviderResult:
     status: Literal['SUCCEEDED', 'FAILED']
-    output_url: str | None
+    outputs: list[GeneratedOutput]
     raw_response: JsonObject
     error_message: str | None = None
 
@@ -67,6 +75,6 @@ class ProviderResult:
 class ProviderWebhookEvent:
     provider_request_id: str
     status: Literal['SUCCEEDED', 'FAILED']
-    output_url: str | None
+    outputs: list[GeneratedOutput]
     raw_response: JsonObject
     error_message: str | None = None

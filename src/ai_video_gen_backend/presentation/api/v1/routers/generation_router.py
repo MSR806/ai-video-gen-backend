@@ -11,7 +11,10 @@ from ai_video_gen_backend.application.generation import (
     ReconcileGenerationJobUseCase,
 )
 from ai_video_gen_backend.config.settings import Settings
-from ai_video_gen_backend.domain.collection_item import ObjectStoragePort
+from ai_video_gen_backend.domain.collection_item import (
+    ObjectStoragePort,
+    VideoThumbnailGeneratorPort,
+)
 from ai_video_gen_backend.domain.generation import GenerationProviderPort, MediaDownloaderPort
 from ai_video_gen_backend.infrastructure.repositories import (
     CollectionItemSqlRepository,
@@ -23,6 +26,7 @@ from ai_video_gen_backend.presentation.api.dependencies import (
     get_generation_provider,
     get_media_downloader,
     get_object_storage,
+    get_video_thumbnail_generator,
 )
 from ai_video_gen_backend.presentation.api.errors import ApiError
 from ai_video_gen_backend.presentation.api.v1.schemas import GenerationJobResponse
@@ -38,6 +42,7 @@ def get_generation_job(
     generation_provider: GenerationProviderPort = Depends(get_generation_provider),
     object_storage: ObjectStoragePort = Depends(get_object_storage),
     media_downloader: MediaDownloaderPort = Depends(get_media_downloader),
+    video_thumbnail_generator: VideoThumbnailGeneratorPort = Depends(get_video_thumbnail_generator),
 ) -> GenerationJobResponse:
     generation_job_repository = GenerationJobSqlRepository(session)
     generation_finalizer = GenerationFinalizer(
@@ -45,6 +50,7 @@ def get_generation_job(
         generation_job_repository=generation_job_repository,
         object_storage=object_storage,
         media_downloader=media_downloader,
+        video_thumbnail_generator=video_thumbnail_generator,
         max_download_bytes=settings.generation_result_max_download_mb * 1024 * 1024,
     )
     reconcile_use_case = ReconcileGenerationJobUseCase(

@@ -30,7 +30,7 @@ def test_extract_status_handles_typed_in_progress_object() -> None:
     assert provider_module._extract_status(InProgress()) == 'IN_PROGRESS'
 
 
-def test_result_uses_response_url_payload_when_envelope_has_no_images(
+def test_result_uses_response_url_payload_when_envelope_has_no_direct_outputs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     provider = FalGenerationProvider(api_key='')
@@ -52,12 +52,14 @@ def test_result_uses_response_url_payload_when_envelope_has_no_images(
     )
 
     result = provider.result(
-        model_key='nano_banana_t2i_v1',
+        endpoint_id='fal-ai/nano-banana',
         provider_request_id='req-123',
     )
 
     assert result.status == 'SUCCEEDED'
-    assert result.output_url == 'https://v3b.fal.media/files/generated.png'
+    assert len(result.outputs) == 1
+    assert result.outputs[0].provider_url == 'https://v3b.fal.media/files/generated.png'
+    assert result.outputs[0].media_type == 'image'
 
 
 def test_result_fails_when_response_url_payload_has_no_output(
@@ -79,10 +81,10 @@ def test_result_fails_when_response_url_payload_has_no_output(
     )
 
     result = provider.result(
-        model_key='nano_banana_t2i_v1',
+        endpoint_id='fal-ai/nano-banana',
         provider_request_id='req-456',
     )
 
     assert result.status == 'FAILED'
-    assert result.output_url is None
+    assert result.outputs == []
     assert result.error_message == 'No output URL in provider response'

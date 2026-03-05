@@ -13,8 +13,7 @@ from ai_video_gen_backend.domain.collection_item import (
     VideoThumbnailGenerationError,
 )
 from ai_video_gen_backend.domain.generation import (
-    GenerationOperation,
-    GenerationRequest,
+    GeneratedOutput,
     ProviderResult,
     ProviderStatus,
     ProviderSubmission,
@@ -83,41 +82,43 @@ class FakeGenerationProvider:
         self._request_counter = 0
         self._statuses: dict[str, ProviderStatus] = {}
         self._results: dict[str, ProviderResult] = {}
-        self.submitted_requests: list[GenerationRequest] = []
+        self.submitted_inputs: list[tuple[str, dict[str, object]]] = []
 
-    def resolve_model_key(self, *, operation: GenerationOperation, model_key: str | None) -> str:
-        del operation
-        return model_key or 'nano_banana_t2i_v1'
-
-    def submit(self, request: GenerationRequest, *, webhook_url: str) -> ProviderSubmission:
+    def submit(
+        self,
+        *,
+        endpoint_id: str,
+        inputs: dict[str, object],
+        webhook_url: str,
+    ) -> ProviderSubmission:
         del webhook_url
-        self.submitted_requests.append(request)
+        self.submitted_inputs.append((endpoint_id, inputs))
         self._request_counter += 1
         request_id = f'req-{self._request_counter}'
         self._statuses[request_id] = ProviderStatus(status='IN_PROGRESS')
         self._results[request_id] = ProviderResult(
             status='FAILED',
-            output_url=None,
+            outputs=[],
             raw_response={'status': 'ERROR'},
             error_message='not-ready',
         )
         return ProviderSubmission(provider_request_id=request_id)
 
-    def status(self, *, model_key: str, provider_request_id: str) -> ProviderStatus:
-        del model_key
+    def status(self, *, endpoint_id: str, provider_request_id: str) -> ProviderStatus:
+        del endpoint_id
         return self._statuses.get(provider_request_id, ProviderStatus(status='FAILED'))
 
     def result(
         self,
         *,
-        model_key: str,
+        endpoint_id: str,
         provider_request_id: str,
     ) -> ProviderResult:
-        del model_key
+        del endpoint_id
         return self._results[provider_request_id]
 
-    def cancel(self, *, model_key: str, provider_request_id: str) -> None:
-        del model_key
+    def cancel(self, *, endpoint_id: str, provider_request_id: str) -> None:
+        del endpoint_id
         self._statuses[provider_request_id] = ProviderStatus(status='CANCELLED')
 
     def parse_webhook(self, payload: dict[str, object]) -> ProviderWebhookEvent | None:
@@ -129,13 +130,20 @@ class FakeGenerationProvider:
             return ProviderWebhookEvent(
                 provider_request_id=request_id,
                 status='SUCCEEDED',
-                output_url='https://example.com/generated.png',
+                outputs=[
+                    GeneratedOutput(
+                        index=0,
+                        media_type='image',
+                        provider_url='https://example.com/generated.png',
+                        metadata={},
+                    )
+                ],
                 raw_response=payload,
             )
         return ProviderWebhookEvent(
             provider_request_id=request_id,
             status='FAILED',
-            output_url=None,
+            outputs=[],
             raw_response=payload,
             error_message='provider error',
         )
@@ -465,6 +473,16 @@ def test_delete_collection_item_storage_failure_returns_502(
     assert any(item['id'] == item_id for item in items_response.json()['items'])
 
 
+def test_get_generation_capabilities_returns_grouped_models(client: TestClient) -> None:
+    response = client.get('/api/v1/generation/capabilities')
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload['image']) >= 1
+    assert len(payload['video']) >= 1
+    assert payload['image'][0]['operations'][0]['operationKey']
+
+
 def test_generate_collection_item_returns_async_job(
     client: TestClient, db_session: Session
 ) -> None:
@@ -477,9 +495,9 @@ def test_generate_collection_item_returns_async_job(
             f'/api/v1/collections/{ids["collection_id"]}/items/generate',
             json={
                 'projectId': str(ids['project_id']),
-                'operation': 'TEXT_TO_IMAGE',
-                'prompt': 'cinematic wide shot',
-                'aspectRatio': 'LANDSCAPE',
+                'modelKey': 'nano_banana',
+                'operationKey': 'text_to_image',
+                'inputs': {'prompt': 'cinematic wide shot', 'aspect_ratio': '16:9'},
             },
         )
     finally:
@@ -487,17 +505,53 @@ def test_generate_collection_item_returns_async_job(
 
     assert response.status_code == 202
     payload = response.json()
-    assert payload['id']
-    assert payload['status'] == 'GENERATING'
     assert payload['jobId']
-    assert payload['url'] is None
+    assert payload['status'] in {'QUEUED', 'IN_PROGRESS'}
+    assert payload['modelKey'] == 'nano_banana'
+    assert payload['operationKey'] == 'text_to_image'
+    assert fake_provider.submitted_inputs[-1][0] == 'fal-ai/nano-banana'
+    assert fake_provider.submitted_inputs[-1][1]['prompt'] == 'cinematic wide shot'
 
     items_response = client.get(f'/api/v1/collections/{ids["collection_id"]}/items')
     assert items_response.status_code == 200
     generated_item = next(
-        item for item in items_response.json()['items'] if item['id'] == payload['id']
+        item for item in items_response.json()['items'] if item.get('jobId') == payload['jobId']
     )
-    assert generated_item['jobId'] == payload['jobId']
+    assert generated_item['status'] == 'GENERATING'
+
+
+def test_generate_collection_item_with_duplicate_idempotency_key_returns_existing_job(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+    fake_provider = FakeGenerationProvider()
+    app = _override_generation_dependency(client, fake_provider)
+
+    request_payload = {
+        'projectId': str(ids['project_id']),
+        'modelKey': 'nano_banana',
+        'operationKey': 'text_to_image',
+        'inputs': {'prompt': 'cinematic wide shot'},
+        'idempotencyKey': 'idem-123',
+    }
+
+    try:
+        first = client.post(
+            f'/api/v1/collections/{ids["collection_id"]}/items/generate',
+            json=request_payload,
+        )
+        second = client.post(
+            f'/api/v1/collections/{ids["collection_id"]}/items/generate',
+            json=request_payload,
+        )
+    finally:
+        app.dependency_overrides.pop(get_generation_provider, None)
+
+    assert first.status_code == 202
+    assert second.status_code == 202
+    assert first.json()['jobId'] == second.json()['jobId']
+    assert len(fake_provider.submitted_inputs) == 1
 
 
 def test_generate_collection_item_image_to_image_accepts_multiple_source_urls(
@@ -518,20 +572,19 @@ def test_generate_collection_item_image_to_image_accepts_multiple_source_urls(
             f'/api/v1/collections/{ids["collection_id"]}/items/generate',
             json={
                 'projectId': str(ids['project_id']),
-                'operation': 'IMAGE_TO_IMAGE',
-                'prompt': 'Edit with two references',
-                'sourceImageUrls': source_urls,
-                'aspectRatio': 'SQUARE',
+                'modelKey': 'nano_banana',
+                'operationKey': 'image_to_image',
+                'inputs': {'prompt': 'Edit with two references', 'image_urls': source_urls},
             },
         )
     finally:
         app.dependency_overrides.pop(get_generation_provider, None)
 
     assert response.status_code == 202
-    assert fake_provider.submitted_requests[-1].source_image_urls == source_urls
+    assert fake_provider.submitted_inputs[-1][1]['image_urls'] == source_urls
 
 
-def test_generate_collection_item_image_to_image_requires_non_empty_source_urls(
+def test_generate_collection_item_image_to_image_requires_source_urls(
     client: TestClient,
     db_session: Session,
 ) -> None:
@@ -541,17 +594,17 @@ def test_generate_collection_item_image_to_image_requires_non_empty_source_urls(
         f'/api/v1/collections/{ids["collection_id"]}/items/generate',
         json={
             'projectId': str(ids['project_id']),
-            'operation': 'IMAGE_TO_IMAGE',
-            'prompt': 'Edit request',
-            'sourceImageUrls': [],
+            'modelKey': 'nano_banana',
+            'operationKey': 'image_to_image',
+            'inputs': {'prompt': 'Edit request'},
         },
     )
 
-    assert response.status_code == 422
-    assert response.json()['error']['code'] == 'validation_error'
+    assert response.status_code == 400
+    assert response.json()['error']['code'] == 'schema_validation_failed'
 
 
-def test_generate_collection_item_text_to_image_rejects_source_urls(
+def test_generate_collection_item_text_to_image_rejects_unknown_input_fields(
     client: TestClient,
     db_session: Session,
 ) -> None:
@@ -561,14 +614,34 @@ def test_generate_collection_item_text_to_image_rejects_source_urls(
         f'/api/v1/collections/{ids["collection_id"]}/items/generate',
         json={
             'projectId': str(ids['project_id']),
-            'operation': 'TEXT_TO_IMAGE',
-            'prompt': 'Should fail',
-            'sourceImageUrls': ['https://example.com/source.png'],
+            'modelKey': 'nano_banana',
+            'operationKey': 'text_to_image',
+            'inputs': {'prompt': 'Should fail', 'image_urls': ['https://example.com/source.png']},
         },
     )
 
-    assert response.status_code == 422
-    assert response.json()['error']['code'] == 'validation_error'
+    assert response.status_code == 400
+    assert response.json()['error']['code'] == 'schema_validation_failed'
+
+
+def test_generate_collection_item_rejects_unsupported_operation_key(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+
+    response = client.post(
+        f'/api/v1/collections/{ids["collection_id"]}/items/generate',
+        json={
+            'projectId': str(ids['project_id']),
+            'modelKey': 'nano_banana',
+            'operationKey': 'text_to_video',
+            'inputs': {'prompt': 'Should fail'},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()['error']['code'] == 'unsupported_operation_key'
 
 
 def test_get_generation_job_returns_404_when_missing(client: TestClient) -> None:
@@ -595,8 +668,9 @@ def test_generation_webhook_invalid_token_returns_401(
             f'/api/v1/collections/{ids["collection_id"]}/items/generate',
             json={
                 'projectId': str(ids['project_id']),
-                'operation': 'TEXT_TO_IMAGE',
-                'prompt': 'sunset',
+                'modelKey': 'nano_banana',
+                'operationKey': 'text_to_image',
+                'inputs': {'prompt': 'sunset'},
             },
         )
         assert submit.status_code == 202
@@ -629,12 +703,13 @@ def test_generation_webhook_failure_marks_placeholder_item_failed(
             f'/api/v1/collections/{ids["collection_id"]}/items/generate',
             json={
                 'projectId': str(ids['project_id']),
-                'operation': 'TEXT_TO_IMAGE',
-                'prompt': 'sunset',
+                'modelKey': 'nano_banana',
+                'operationKey': 'text_to_image',
+                'inputs': {'prompt': 'sunset'},
             },
         )
         assert submit.status_code == 202
-        item_id = submit.json()['id']
+        job_id = submit.json()['jobId']
 
         webhook = client.post(
             '/api/v1/provider-webhooks/fal?token=',
@@ -649,7 +724,9 @@ def test_generation_webhook_failure_marks_placeholder_item_failed(
 
     items_response = client.get(f'/api/v1/collections/{ids["collection_id"]}/items')
     assert items_response.status_code == 200
-    generated_item = next(item for item in items_response.json()['items'] if item['id'] == item_id)
+    generated_item = next(
+        item for item in items_response.json()['items'] if item['jobId'] == job_id
+    )
     assert generated_item['status'] == 'FAILED'
 
 

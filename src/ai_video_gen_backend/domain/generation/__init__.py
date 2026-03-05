@@ -1,7 +1,14 @@
+from .capabilities import (
+    GenerationCapabilities,
+    InputFieldCapability,
+    ModelCapability,
+    OperationCapability,
+    ResolvedGenerationOperation,
+)
 from .downloader import MediaDownloaderPort, MediaDownloadError
 from .entities import (
+    GeneratedOutput,
     GenerationJob,
-    GenerationOperation,
     GenerationRequest,
     GenerationStatus,
     ProviderResult,
@@ -9,19 +16,29 @@ from .entities import (
     ProviderSubmission,
     ProviderWebhookEvent,
 )
-from .ports import GenerationJobRepositoryPort, GenerationProviderPort
+from .ports import (
+    GenerationCapabilityRegistryPort,
+    GenerationJobRepositoryPort,
+    GenerationProviderPort,
+)
 
 __all__ = [
+    'GeneratedOutput',
+    'GenerationCapabilities',
+    'GenerationCapabilityRegistryPort',
     'GenerationJob',
     'GenerationJobRepositoryPort',
-    'GenerationOperation',
     'GenerationProviderPort',
     'GenerationRequest',
     'GenerationStatus',
+    'InputFieldCapability',
     'MediaDownloadError',
     'MediaDownloaderPort',
+    'ModelCapability',
+    'OperationCapability',
     'ProviderResult',
     'ProviderStatus',
     'ProviderSubmission',
     'ProviderWebhookEvent',
+    'ResolvedGenerationOperation',
 ]

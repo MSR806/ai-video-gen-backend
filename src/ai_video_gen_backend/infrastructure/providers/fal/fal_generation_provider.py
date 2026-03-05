@@ -5,26 +5,20 @@ import os
 import re
 from collections.abc import Mapping
 from types import ModuleType
+from typing import Literal
 
 import fal_client
 import httpx
 
 from ai_video_gen_backend.domain.generation import (
-    GenerationOperation,
+    GeneratedOutput,
     GenerationProviderPort,
-    GenerationRequest,
     ProviderResult,
     ProviderStatus,
     ProviderSubmission,
     ProviderWebhookEvent,
 )
-from ai_video_gen_backend.infrastructure.providers.fal.model_catalog import (
-    get_model_profile,
-    resolve_model_key,
-)
-from ai_video_gen_backend.infrastructure.providers.fal.model_mapper_registry import (
-    get_model_mapper,
-)
+from ai_video_gen_backend.domain.types import JsonObject
 
 logger = logging.getLogger(__name__)
 
@@ -33,25 +27,23 @@ class FalGenerationProvider(GenerationProviderPort):
     def __init__(self, *, api_key: str) -> None:
         self._api_key = api_key
 
-    def resolve_model_key(self, *, operation: GenerationOperation, model_key: str | None) -> str:
-        return resolve_model_key(operation=operation, model_key=model_key)
-
-    def submit(self, request: GenerationRequest, *, webhook_url: str) -> ProviderSubmission:
-        fal_client = self._client()
-        profile = get_model_profile(request.model_key or '')
-        mapper = get_model_mapper(profile.mapper_key)
-        arguments = mapper.to_arguments(request)
+    def submit(
+        self,
+        *,
+        endpoint_id: str,
+        inputs: dict[str, object],
+        webhook_url: str,
+    ) -> ProviderSubmission:
+        fal_client_module = self._client()
         logger.info(
-            'Submitting generation request to FAL '
-            'endpoint=%s model_key=%s payload=%s webhook_url=%s',
-            profile.endpoint_id,
-            profile.key,
-            arguments,
+            'Submitting generation request to FAL endpoint=%s payload=%s webhook_url=%s',
+            endpoint_id,
+            inputs,
             webhook_url,
         )
-        handler = fal_client.submit(
-            profile.endpoint_id,
-            arguments=arguments,
+        handler = fal_client_module.submit(
+            endpoint_id,
+            arguments=inputs,
             webhook_url=webhook_url,
         )
 
@@ -61,19 +53,14 @@ class FalGenerationProvider(GenerationProviderPort):
             raise RuntimeError(msg)
 
         logger.info(
-            'FAL generation request accepted endpoint=%s model_key=%s request_id=%s',
-            profile.endpoint_id,
-            profile.key,
-            request_id,
+            'FAL generation request accepted endpoint=%s request_id=%s', endpoint_id, request_id
         )
-
         return ProviderSubmission(provider_request_id=request_id)
 
-    def status(self, *, model_key: str, provider_request_id: str) -> ProviderStatus:
-        fal_client = self._client()
-        profile = get_model_profile(model_key)
-        status_response = fal_client.status(
-            profile.endpoint_id,
+    def status(self, *, endpoint_id: str, provider_request_id: str) -> ProviderStatus:
+        fal_client_module = self._client()
+        status_response = fal_client_module.status(
+            endpoint_id,
             provider_request_id,
             with_logs=False,
         )
@@ -90,36 +77,32 @@ class FalGenerationProvider(GenerationProviderPort):
     def result(
         self,
         *,
-        model_key: str,
+        endpoint_id: str,
         provider_request_id: str,
     ) -> ProviderResult:
-        fal_client = self._client()
-        profile = get_model_profile(model_key)
-        mapper = get_model_mapper(profile.mapper_key)
-        response = fal_client.result(profile.endpoint_id, provider_request_id)
+        fal_client_module = self._client()
+        response = fal_client_module.result(endpoint_id, provider_request_id)
         payload = _to_dict(response)
         resolved_payload = _resolve_result_payload(payload)
-        output_url = mapper.extract_output_url(resolved_payload)
-        if output_url is None:
-            output_url = _extract_output_url_from_payload(resolved_payload)
-        if output_url is None:
+        outputs = _extract_outputs_from_payload(resolved_payload)
+
+        if len(outputs) == 0:
             return ProviderResult(
                 status='FAILED',
-                output_url=None,
+                outputs=[],
                 raw_response=resolved_payload,
                 error_message='No output URL in provider response',
             )
 
         return ProviderResult(
             status='SUCCEEDED',
-            output_url=output_url,
+            outputs=outputs,
             raw_response=resolved_payload,
         )
 
-    def cancel(self, *, model_key: str, provider_request_id: str) -> None:
-        fal_client = self._client()
-        profile = get_model_profile(model_key)
-        fal_client.cancel(profile.endpoint_id, provider_request_id)
+    def cancel(self, *, endpoint_id: str, provider_request_id: str) -> None:
+        fal_client_module = self._client()
+        fal_client_module.cancel(endpoint_id, provider_request_id)
 
     def parse_webhook(self, payload: dict[str, object]) -> ProviderWebhookEvent | None:
         request_id_raw = payload.get('request_id')
@@ -131,13 +114,13 @@ class FalGenerationProvider(GenerationProviderPort):
             return None
 
         normalized = status_raw.upper()
-        output_url = _extract_output_url_from_payload(payload)
+        outputs = _extract_outputs_from_payload(payload)
 
         if normalized in {'OK', 'COMPLETED', 'SUCCEEDED'}:
             return ProviderWebhookEvent(
                 provider_request_id=request_id_raw,
                 status='SUCCEEDED',
-                output_url=output_url,
+                outputs=outputs,
                 raw_response=payload,
             )
 
@@ -146,7 +129,7 @@ class FalGenerationProvider(GenerationProviderPort):
             return ProviderWebhookEvent(
                 provider_request_id=request_id_raw,
                 status='FAILED',
-                output_url=None,
+                outputs=[],
                 raw_response=payload,
                 error_message=error_message if isinstance(error_message, str) else None,
             )
@@ -191,8 +174,6 @@ def _extract_status(status_response: object) -> str:
         if isinstance(state_value, str):
             return state_value
 
-    # fal-client may return typed status objects like Completed(logs=..., metrics=...)
-    # without a `status` attribute. Fall back to class-name normalization.
     class_name = type(status_response).__name__
     if len(class_name) > 0:
         normalized = re.sub(r'(?<!^)([A-Z])', r'_\1', class_name).upper()
@@ -223,27 +204,8 @@ def _to_dict(value: object) -> dict[str, object]:
     return {'raw': value}
 
 
-def _extract_output_url_from_payload(payload: dict[str, object]) -> str | None:
-    candidates: list[dict[str, object]] = []
-    nested_payload = payload.get('payload')
-    if isinstance(nested_payload, dict):
-        candidates.append(nested_payload)
-    candidates.append(payload)
-
-    for candidate in candidates:
-        images = candidate.get('images')
-        if isinstance(images, list) and len(images) > 0:
-            first = images[0]
-            if isinstance(first, dict):
-                url = first.get('url')
-                if isinstance(url, str) and len(url.strip()) > 0:
-                    return url
-
-    return None
-
-
 def _resolve_result_payload(payload: dict[str, object]) -> dict[str, object]:
-    if _extract_output_url_from_payload(payload) is not None:
+    if len(_extract_outputs_from_payload(payload)) > 0:
         return payload
 
     response_url = _extract_response_url(payload)
@@ -285,3 +247,177 @@ def _fetch_response_payload(response_url: str) -> dict[str, object] | None:
         return None
 
     return _to_dict(parsed)
+
+
+def _extract_outputs_from_payload(payload: dict[str, object]) -> list[GeneratedOutput]:
+    candidates: list[dict[str, object]] = []
+    nested_payload = payload.get('payload')
+    if isinstance(nested_payload, dict):
+        candidates.append(nested_payload)
+    candidates.append(payload)
+
+    extracted: list[GeneratedOutput] = []
+    seen_urls: set[str] = set()
+
+    for candidate in candidates:
+        _append_outputs_from_key(
+            extracted=extracted,
+            seen_urls=seen_urls,
+            candidate=candidate,
+            key='images',
+            media_type='image',
+        )
+        _append_outputs_from_key(
+            extracted=extracted,
+            seen_urls=seen_urls,
+            candidate=candidate,
+            key='videos',
+            media_type='video',
+        )
+        _append_single_output(
+            extracted=extracted,
+            seen_urls=seen_urls,
+            candidate=candidate,
+            key='image',
+            media_type='image',
+        )
+        _append_single_output(
+            extracted=extracted,
+            seen_urls=seen_urls,
+            candidate=candidate,
+            key='video',
+            media_type='video',
+        )
+
+        generic_outputs = candidate.get('outputs')
+        if isinstance(generic_outputs, list):
+            for raw_output in generic_outputs:
+                if not isinstance(raw_output, Mapping):
+                    continue
+                output_dict = _to_dict(raw_output)
+                url = _extract_output_url(output_dict)
+                if url is None or url in seen_urls:
+                    continue
+                seen_urls.add(url)
+                media_type = _extract_output_media_type(output_dict)
+                extracted.append(
+                    GeneratedOutput(
+                        index=len(extracted),
+                        media_type=media_type,
+                        provider_url=url,
+                        metadata=_extract_metadata(output_dict),
+                    )
+                )
+
+        output_url = candidate.get('output_url')
+        if (
+            isinstance(output_url, str)
+            and len(output_url.strip()) > 0
+            and output_url not in seen_urls
+        ):
+            seen_urls.add(output_url)
+            extracted.append(
+                GeneratedOutput(
+                    index=len(extracted),
+                    media_type='video',
+                    provider_url=output_url,
+                    metadata={},
+                )
+            )
+
+    return extracted
+
+
+def _append_outputs_from_key(
+    *,
+    extracted: list[GeneratedOutput],
+    seen_urls: set[str],
+    candidate: dict[str, object],
+    key: str,
+    media_type: Literal['image', 'video'],
+) -> None:
+    values = candidate.get(key)
+    if not isinstance(values, list):
+        return
+
+    for raw_value in values:
+        if not isinstance(raw_value, Mapping):
+            continue
+        output_dict = _to_dict(raw_value)
+        url = _extract_output_url(output_dict)
+        if url is None or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        extracted.append(
+            GeneratedOutput(
+                index=len(extracted),
+                media_type=media_type,
+                provider_url=url,
+                metadata=_extract_metadata(output_dict),
+            )
+        )
+
+
+def _append_single_output(
+    *,
+    extracted: list[GeneratedOutput],
+    seen_urls: set[str],
+    candidate: dict[str, object],
+    key: str,
+    media_type: Literal['image', 'video'],
+) -> None:
+    value = candidate.get(key)
+    if not isinstance(value, Mapping):
+        return
+    output_dict = _to_dict(value)
+    url = _extract_output_url(output_dict)
+    if url is None or url in seen_urls:
+        return
+    seen_urls.add(url)
+    extracted.append(
+        GeneratedOutput(
+            index=len(extracted),
+            media_type=media_type,
+            provider_url=url,
+            metadata=_extract_metadata(output_dict),
+        )
+    )
+
+
+def _extract_output_url(payload: dict[str, object]) -> str | None:
+    url = payload.get('url')
+    if isinstance(url, str) and len(url.strip()) > 0:
+        return url
+
+    provider_url = payload.get('provider_url')
+    if isinstance(provider_url, str) and len(provider_url.strip()) > 0:
+        return provider_url
+
+    return None
+
+
+def _extract_output_media_type(payload: dict[str, object]) -> Literal['image', 'video']:
+    media_type = payload.get('media_type')
+    if media_type == 'image':
+        return 'image'
+    if media_type == 'video':
+        return 'video'
+
+    content_type = payload.get('content_type')
+    if isinstance(content_type, str):
+        return 'video' if content_type.startswith('video/') else 'image'
+
+    mime_type = payload.get('mime_type')
+    if isinstance(mime_type, str):
+        return 'video' if mime_type.startswith('video/') else 'image'
+
+    return 'image'
+
+
+def _extract_metadata(payload: dict[str, object]) -> JsonObject:
+    metadata: JsonObject = {}
+    for key, value in payload.items():
+        if key in {'url', 'provider_url'}:
+            continue
+        metadata[key] = value
+    return metadata

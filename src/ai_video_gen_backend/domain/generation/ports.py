@@ -3,10 +3,9 @@ from __future__ import annotations
 from typing import Protocol
 from uuid import UUID
 
+from .capabilities import GenerationCapabilities, ResolvedGenerationOperation
 from .entities import (
     GenerationJob,
-    GenerationOperation,
-    GenerationRequest,
     ProviderResult,
     ProviderStatus,
     ProviderSubmission,
@@ -14,23 +13,35 @@ from .entities import (
 )
 
 
+class GenerationCapabilityRegistryPort(Protocol):
+    def list_capabilities(self) -> GenerationCapabilities: ...
+
+    def has_model(self, *, model_key: str) -> bool: ...
+
+    def resolve_operation(
+        self, *, model_key: str, operation_key: str
+    ) -> ResolvedGenerationOperation | None: ...
+
+
 class GenerationProviderPort(Protocol):
-    def resolve_model_key(
-        self, *, operation: GenerationOperation, model_key: str | None
-    ) -> str: ...
+    def submit(
+        self,
+        *,
+        endpoint_id: str,
+        inputs: dict[str, object],
+        webhook_url: str,
+    ) -> ProviderSubmission: ...
 
-    def submit(self, request: GenerationRequest, *, webhook_url: str) -> ProviderSubmission: ...
-
-    def status(self, *, model_key: str, provider_request_id: str) -> ProviderStatus: ...
+    def status(self, *, endpoint_id: str, provider_request_id: str) -> ProviderStatus: ...
 
     def result(
         self,
         *,
-        model_key: str,
+        endpoint_id: str,
         provider_request_id: str,
     ) -> ProviderResult: ...
 
-    def cancel(self, *, model_key: str, provider_request_id: str) -> None: ...
+    def cancel(self, *, endpoint_id: str, provider_request_id: str) -> None: ...
 
     def parse_webhook(self, payload: dict[str, object]) -> ProviderWebhookEvent | None: ...
 
@@ -42,15 +53,25 @@ class GenerationJobRepositoryPort(Protocol):
         project_id: UUID,
         collection_id: UUID,
         collection_item_id: UUID,
-        operation: str,
+        operation_key: str,
         provider: str,
         model_key: str,
-        request_payload: dict[str, object],
+        endpoint_id: str,
+        inputs_json: dict[str, object],
+        idempotency_key: str | None,
     ) -> GenerationJob: ...
 
     def get_by_id(self, job_id: UUID) -> GenerationJob | None: ...
 
     def get_by_provider_request_id(self, provider_request_id: str) -> GenerationJob | None: ...
+
+    def get_by_idempotency_key(
+        self,
+        *,
+        project_id: UUID,
+        collection_id: UUID,
+        idempotency_key: str,
+    ) -> GenerationJob | None: ...
 
     def mark_submitted(self, job_id: UUID, *, provider_request_id: str) -> GenerationJob: ...
 
@@ -60,7 +81,8 @@ class GenerationJobRepositoryPort(Protocol):
         self,
         job_id: UUID,
         *,
-        provider_response: dict[str, object],
+        provider_response_json: dict[str, object],
+        outputs_json: list[dict[str, object]],
     ) -> GenerationJob: ...
 
     def mark_failed(
@@ -69,5 +91,5 @@ class GenerationJobRepositoryPort(Protocol):
         *,
         error_code: str,
         error_message: str,
-        provider_response: dict[str, object] | None = None,
+        provider_response_json: dict[str, object] | None = None,
     ) -> GenerationJob: ...

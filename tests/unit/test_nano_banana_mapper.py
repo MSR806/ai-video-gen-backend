@@ -1,86 +1,86 @@
 from __future__ import annotations
 
-from uuid import uuid4
-
 import pytest
 
-from ai_video_gen_backend.domain.generation import GenerationRequest
-from ai_video_gen_backend.infrastructure.providers.fal.nano_banana_mapper import NanoBananaMapper
+from ai_video_gen_backend.application.generation import (
+    GenerationInputValidator,
+    InvalidGenerationInputsError,
+)
+from ai_video_gen_backend.infrastructure.providers.fal.schema_normalizer import (
+    normalize_operation_schema,
+)
 
 
-def test_nano_banana_mapper_builds_text_to_image_arguments() -> None:
-    mapper = NanoBananaMapper()
-    request = GenerationRequest(
-        project_id=uuid4(),
-        collection_id=uuid4(),
-        operation='TEXT_TO_IMAGE',
-        prompt='hello world',
-        source_image_urls=None,
-        model_key='nano_banana_t2i_v1',
-        aspect_ratio='LANDSCAPE',
-        seed=42,
-    )
+def test_schema_normalizer_extracts_required_and_field_shapes() -> None:
+    input_schema = {
+        'type': 'object',
+        'required': ['prompt'],
+        'properties': {
+            'prompt': {'type': 'string', 'description': 'Main prompt'},
+            'seed': {'type': 'integer', 'default': 42},
+            'mode': {'type': 'string', 'enum': ['fast', 'quality']},
+            'image_urls': {'type': 'array', 'items': {'type': 'string'}},
+        },
+        'additionalProperties': False,
+    }
 
-    arguments = mapper.to_arguments(request)
+    required, fields = normalize_operation_schema(input_schema)
 
-    assert arguments['prompt'] == 'hello world'
-    assert arguments['aspect_ratio'] == '16:9'
-    assert arguments['num_images'] == 1
-    assert arguments['seed'] == 42
-    assert 'image_urls' not in arguments
-
-
-def test_nano_banana_mapper_builds_image_to_image_arguments() -> None:
-    mapper = NanoBananaMapper()
-    request = GenerationRequest(
-        project_id=uuid4(),
-        collection_id=uuid4(),
-        operation='IMAGE_TO_IMAGE',
-        prompt='edit this',
-        source_image_urls=['https://example.com/source.png'],
-        model_key='nano_banana_i2i_v1',
-        aspect_ratio='SQUARE',
-    )
-
-    arguments = mapper.to_arguments(request)
-
-    assert arguments['aspect_ratio'] == '1:1'
-    assert arguments['image_urls'] == ['https://example.com/source.png']
+    assert required == ['prompt']
+    assert len(fields) == 4
+    prompt = next(field for field in fields if field.key == 'prompt')
+    image_urls = next(field for field in fields if field.key == 'image_urls')
+    assert prompt.required is True
+    assert prompt.type == 'string'
+    assert image_urls.type == 'array'
+    assert image_urls.items_type == 'string'
 
 
-def test_nano_banana_mapper_preserves_multiple_source_urls() -> None:
-    mapper = NanoBananaMapper()
-    source_urls = [
-        'https://example.com/source-1.png',
-        'https://example.com/source-2.png',
-    ]
-    request = GenerationRequest(
-        project_id=uuid4(),
-        collection_id=uuid4(),
-        operation='IMAGE_TO_IMAGE',
-        prompt='edit this',
-        source_image_urls=source_urls,
-        model_key='nano_banana_i2i_v1',
-        aspect_ratio='PORTRAIT',
-    )
+def test_generation_input_validator_accepts_valid_payload() -> None:
+    validator = GenerationInputValidator()
+    schema = {
+        'type': 'object',
+        'required': ['prompt'],
+        'properties': {
+            'prompt': {'type': 'string'},
+            'num_images': {'type': 'integer'},
+        },
+        'additionalProperties': False,
+    }
 
-    arguments = mapper.to_arguments(request)
-
-    assert arguments['aspect_ratio'] == '9:16'
-    assert arguments['image_urls'] == source_urls
+    validator.validate(inputs={'prompt': 'hello', 'num_images': 1}, schema=schema)
 
 
-def test_nano_banana_mapper_requires_source_image_for_image_to_image() -> None:
-    mapper = NanoBananaMapper()
-    request = GenerationRequest(
-        project_id=uuid4(),
-        collection_id=uuid4(),
-        operation='IMAGE_TO_IMAGE',
-        prompt='edit this',
-        source_image_urls=None,
-        model_key='nano_banana_i2i_v1',
-        aspect_ratio='SQUARE',
-    )
+def test_generation_input_validator_rejects_unknown_fields() -> None:
+    validator = GenerationInputValidator()
+    schema = {
+        'type': 'object',
+        'required': ['prompt'],
+        'properties': {'prompt': {'type': 'string'}},
+        'additionalProperties': False,
+    }
 
-    with pytest.raises(ValueError):
-        mapper.to_arguments(request)
+    with pytest.raises(InvalidGenerationInputsError) as exc_info:
+        validator.validate(
+            inputs={'prompt': 'hello', 'unexpected': 'value'},
+            schema=schema,
+        )
+
+    assert len(exc_info.value.errors) == 1
+    assert exc_info.value.errors[0]['loc'] == ['body', 'inputs']
+
+
+def test_generation_input_validator_rejects_missing_required_field() -> None:
+    validator = GenerationInputValidator()
+    schema = {
+        'type': 'object',
+        'required': ['prompt'],
+        'properties': {'prompt': {'type': 'string'}},
+        'additionalProperties': False,
+    }
+
+    with pytest.raises(InvalidGenerationInputsError) as exc_info:
+        validator.validate(inputs={}, schema=schema)
+
+    assert len(exc_info.value.errors) == 1
+    assert exc_info.value.errors[0]['loc'] == ['body', 'inputs', 'prompt']

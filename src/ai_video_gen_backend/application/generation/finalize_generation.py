@@ -7,6 +7,8 @@ from ai_video_gen_backend.domain.collection_item import (
     CollectionItemRepositoryPort,
     ObjectStoragePort,
     StorageError,
+    VideoThumbnailGenerationError,
+    VideoThumbnailGeneratorPort,
 )
 from ai_video_gen_backend.domain.generation import (
     GenerationJobRepositoryPort,
@@ -28,12 +30,14 @@ class GenerationFinalizer:
         generation_job_repository: GenerationJobRepositoryPort,
         object_storage: ObjectStoragePort,
         media_downloader: MediaDownloaderPort,
+        video_thumbnail_generator: VideoThumbnailGeneratorPort,
         max_download_bytes: int,
     ) -> None:
         self._collection_item_repository = collection_item_repository
         self._generation_job_repository = generation_job_repository
         self._object_storage = object_storage
         self._media_downloader = media_downloader
+        self._video_thumbnail_generator = video_thumbnail_generator
         self._max_download_bytes = max_download_bytes
 
     def finalize_success(
@@ -41,12 +45,19 @@ class GenerationFinalizer:
         *,
         job_id: UUID,
         item_id: UUID,
-        output_url: str,
-        provider_response: dict[str, object],
+        output: dict[str, object],
+        provider_response_json: dict[str, object],
+        outputs_json: list[dict[str, object]],
     ) -> None:
+        provider_url = output.get('provider_url')
+        if not isinstance(provider_url, str) or len(provider_url.strip()) == 0:
+            raise GenerationFinalizationError(
+                'Provider response did not include a valid output URL'
+            )
+
         try:
             downloaded, content_type = self._media_downloader.download(
-                output_url, max_bytes=self._max_download_bytes
+                provider_url, max_bytes=self._max_download_bytes
             )
         except MediaDownloadError as exc:
             raise GenerationFinalizationError(str(exc)) from exc
@@ -63,8 +74,13 @@ class GenerationFinalizer:
         except StorageError as exc:
             raise GenerationFinalizationError('Failed to store generated output') from exc
 
+        media_type = self._resolve_media_type(output=output, content_type=content_type)
+        thumbnail_url = stored_object.url
+        if media_type == 'video':
+            thumbnail_url = self._generate_video_thumbnail(item_id=item_id, video=downloaded)
+
         metadata: JsonObject = {
-            'thumbnailUrl': stored_object.url,
+            'thumbnailUrl': thumbnail_url,
             'format': self._format_from_content_type(content_type),
             'sizeBytes': stored_object.size_bytes,
             'width': 0,
@@ -86,7 +102,8 @@ class GenerationFinalizer:
 
         self._generation_job_repository.mark_succeeded(
             job_id,
-            provider_response=provider_response,
+            provider_response_json=provider_response_json,
+            outputs_json=outputs_json,
         )
 
     def finalize_failure(
@@ -96,7 +113,7 @@ class GenerationFinalizer:
         item_id: UUID,
         error_code: str,
         error_message: str,
-        provider_response: dict[str, object] | None = None,
+        provider_response_json: dict[str, object] | None = None,
     ) -> None:
         updated_item = self._collection_item_repository.mark_generated_item_failed(
             item_id=item_id,
@@ -109,7 +126,7 @@ class GenerationFinalizer:
             job_id,
             error_code=error_code,
             error_message=error_message,
-            provider_response=provider_response,
+            provider_response_json=provider_response_json,
         )
 
     def _build_storage_key(self, *, item_id: UUID, content_type: str) -> str:
@@ -132,3 +149,29 @@ class GenerationFinalizer:
             return 'png'
 
         return safe_suffix
+
+    def _resolve_media_type(self, *, output: dict[str, object], content_type: str) -> str:
+        raw_media_type = output.get('media_type')
+        if isinstance(raw_media_type, str) and raw_media_type in {'image', 'video'}:
+            return raw_media_type
+        return 'video' if content_type.startswith('video/') else 'image'
+
+    def _generate_video_thumbnail(self, *, item_id: UUID, video: bytes) -> str:
+        try:
+            thumbnail = self._video_thumbnail_generator.extract_first_frame(
+                video_stream=BytesIO(video)
+            )
+        except VideoThumbnailGenerationError:
+            return ''
+
+        try:
+            stored_thumbnail = self._object_storage.upload_object(
+                key=f'generated/{item_id}-thumb.jpg',
+                content_type='image/jpeg',
+                body=BytesIO(thumbnail),
+                size_bytes=len(thumbnail),
+            )
+        except StorageError:
+            return ''
+
+        return stored_thumbnail.url

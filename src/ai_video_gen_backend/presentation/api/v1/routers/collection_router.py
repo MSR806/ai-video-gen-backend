@@ -23,9 +23,11 @@ from ai_video_gen_backend.application.collection_item import (
     UploadCollectionItemUseCase,
 )
 from ai_video_gen_backend.application.generation import (
-    InvalidGenerationRequestError,
+    GenerationInputValidator,
+    InvalidGenerationInputsError,
     SubmitGenerationJobUseCase,
-    UnsupportedModelError,
+    UnsupportedModelKeyError,
+    UnsupportedOperationKeyError,
 )
 from ai_video_gen_backend.config.settings import Settings
 from ai_video_gen_backend.domain.collection_item import (
@@ -35,7 +37,12 @@ from ai_video_gen_backend.domain.collection_item import (
     StorageError,
     VideoThumbnailGeneratorPort,
 )
-from ai_video_gen_backend.domain.generation import GenerationProviderPort, GenerationRequest
+from ai_video_gen_backend.domain.generation import (
+    GenerationCapabilityRegistryPort,
+    GenerationProviderPort,
+    GenerationRequest,
+)
+from ai_video_gen_backend.infrastructure.providers.fal import CapabilityRegistryLoadError
 from ai_video_gen_backend.infrastructure.repositories import (
     CollectionItemSqlRepository,
     CollectionSqlRepository,
@@ -44,6 +51,8 @@ from ai_video_gen_backend.infrastructure.repositories import (
 from ai_video_gen_backend.presentation.api.dependencies import (
     get_app_settings,
     get_db_session,
+    get_generation_capability_registry,
+    get_generation_input_validator,
     get_generation_provider,
     get_object_storage,
     get_video_thumbnail_generator,
@@ -55,7 +64,8 @@ from ai_video_gen_backend.presentation.api.v1.schemas import (
     CollectionItemResponse,
     CollectionResponse,
     CreateCollectionItemRequest,
-    GenerateCollectionItemRequest,
+    GenerationSubmitRequest,
+    GenerationSubmitResponse,
 )
 
 router = APIRouter(tags=['collections'])
@@ -296,16 +306,20 @@ def delete_collection_item(
 
 @router.post(
     '/collections/{collection_id}/items/generate',
-    response_model=CollectionItemResponse,
+    response_model=GenerationSubmitResponse,
     status_code=202,
 )
 def generate_collection_item(
     collection_id: UUID,
-    request: GenerateCollectionItemRequest,
+    request: GenerationSubmitRequest,
     settings: Settings = Depends(get_app_settings),
     session: Session = Depends(get_db_session),
     generation_provider: GenerationProviderPort = Depends(get_generation_provider),
-) -> CollectionItemResponse:
+    capability_registry: GenerationCapabilityRegistryPort = Depends(
+        get_generation_capability_registry
+    ),
+    input_validator: GenerationInputValidator = Depends(get_generation_input_validator),
+) -> GenerationSubmitResponse:
     collection_use_case = GetCollectionByIdUseCase(CollectionSqlRepository(session))
     collection = collection_use_case.execute(collection_id)
     if collection is None:
@@ -322,44 +336,55 @@ def generate_collection_item(
         collection_item_repository=CollectionItemSqlRepository(session),
         generation_job_repository=GenerationJobSqlRepository(session),
         generation_provider=generation_provider,
+        capability_registry=capability_registry,
+        input_validator=input_validator,
         webhook_url=_build_generation_webhook_url(settings),
     )
     try:
-        placeholder_item = use_case.execute(
+        generation_job = use_case.execute(
             GenerationRequest(
                 project_id=request.project_id,
                 collection_id=collection_id,
-                operation=request.operation,
-                prompt=request.prompt,
-                source_image_urls=request.source_image_urls,
                 model_key=request.model_key,
-                aspect_ratio=request.aspect_ratio,
-                seed=request.seed,
+                operation_key=request.operation_key,
+                inputs=request.inputs,
                 idempotency_key=request.idempotency_key,
             )
         )
-    except UnsupportedModelError as exc:
+    except UnsupportedModelKeyError as exc:
         raise ApiError(
             status_code=400,
-            code='unsupported_model',
+            code='unsupported_model_key',
             message='Unsupported or disabled model key',
         ) from exc
-    except InvalidGenerationRequestError as exc:
+    except UnsupportedOperationKeyError as exc:
         raise ApiError(
             status_code=400,
-            code='validation_error',
-            message='Request validation failed',
-            details={'errors': [{'loc': ['body'], 'msg': str(exc)}]},
+            code='unsupported_operation_key',
+            message='Unsupported operation key for model',
+        ) from exc
+    except InvalidGenerationInputsError as exc:
+        raise ApiError(
+            status_code=400,
+            code='schema_validation_failed',
+            message='Generation inputs validation failed',
+            details={'errors': exc.errors},
+        ) from exc
+    except CapabilityRegistryLoadError as exc:
+        raise ApiError(
+            status_code=500,
+            code='capability_registry_load_failed',
+            message='Failed to load generation model registry',
         ) from exc
     except Exception as exc:
         raise ApiError(
             status_code=502,
-            code='generation_submit_failed',
+            code='provider_submit_failed',
             message='Failed to submit generation request',
             details={'reason': str(exc.__class__.__name__)},
         ) from exc
 
-    return CollectionItemResponse.from_domain(placeholder_item)
+    return GenerationSubmitResponse.from_domain(generation_job)
 
 
 def _parse_upload_metadata(metadata_raw: str | None) -> JsonObject | None:

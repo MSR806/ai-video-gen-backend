@@ -9,10 +9,11 @@ from .collection_schema import (
     CreateCollectionRequest,
 )
 from .error_schema import ErrorEnvelope
+from .generation_capability_schema import GenerationCapabilitiesResponse
 from .generation_schema import (
-    GenerateCollectionItemRequest,
     GenerationJobResponse,
 )
+from .generation_submit_schema import GenerationSubmitRequest, GenerationSubmitResponse
 from .project_schema import CreateProjectRequest, ProjectResponse
 from .scene_schema import (
     CreateSceneRequest,
@@ -31,8 +32,10 @@ __all__ = [
     'CreateProjectRequest',
     'CreateSceneRequest',
     'ErrorEnvelope',
-    'GenerateCollectionItemRequest',
+    'GenerationCapabilitiesResponse',
     'GenerationJobResponse',
+    'GenerationSubmitRequest',
+    'GenerationSubmitResponse',
     'ProjectResponse',
     'SceneResponse',
     'SceneSyncResponse',
