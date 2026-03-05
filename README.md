@@ -53,6 +53,15 @@ uv run mypy src tests
 uv run pytest -q
 ```
 
+## Coverage report
+
+```bash
+source .venv/bin/activate
+uv run --with coverage coverage erase
+uv run --with coverage coverage run --source=src/ai_video_gen_backend -m pytest -q
+uv run --with coverage coverage report -m
+```
+
 ## Commit message format
 
 Conventional Commits are enforced via `gitlint` as a `commit-msg` hook.
