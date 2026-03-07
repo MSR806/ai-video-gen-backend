@@ -25,7 +25,8 @@ class CollectionItemResponse(StrictSchema):
     metadata: dict[str, JsonValue]
     generation_source: str = Field(alias='generationSource')
     generation_error_message: str | None = Field(default=None, alias='generationErrorMessage')
-    job_id: UUID | None = Field(default=None, alias='jobId')
+    run_id: UUID | None = Field(default=None, alias='runId')
+    generation_run_output_id: UUID | None = Field(default=None, alias='generationRunOutputId')
     storage_provider: str | None = Field(default=None, alias='storageProvider')
     storage_bucket: str | None = Field(default=None, alias='storageBucket')
     storage_key: str | None = Field(default=None, alias='storageKey')
@@ -48,7 +49,8 @@ class CollectionItemResponse(StrictSchema):
             metadata=item.metadata,
             generation_source=item.generation_source,
             generation_error_message=item.generation_error_message,
-            job_id=item.job_id,
+            run_id=item.run_id,
+            generation_run_output_id=item.generation_run_output_id,
             storage_provider=item.storage_provider,
             storage_bucket=item.storage_bucket,
             storage_key=item.storage_key,
@@ -70,7 +72,8 @@ class CollectionItemReadResponse(StrictSchema):
     url: str | None
     metadata: dict[str, JsonValue]
     generation_error_message: str | None = Field(default=None, alias='generationErrorMessage')
-    job_id: UUID | None = Field(default=None, alias='jobId')
+    run_id: UUID | None = Field(default=None, alias='runId')
+    generation_run_output_id: UUID | None = Field(default=None, alias='generationRunOutputId')
 
     @classmethod
     def from_domain(cls, item: CollectionItem) -> CollectionItemReadResponse:
@@ -85,7 +88,8 @@ class CollectionItemReadResponse(StrictSchema):
             url=item.url,
             metadata=item.metadata,
             generation_error_message=item.generation_error_message,
-            job_id=item.job_id,
+            run_id=item.run_id,
+            generation_run_output_id=item.generation_run_output_id,
         )
 
 

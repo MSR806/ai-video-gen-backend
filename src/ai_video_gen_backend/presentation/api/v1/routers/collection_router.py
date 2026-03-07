@@ -25,7 +25,9 @@ from ai_video_gen_backend.application.collection_item import (
 from ai_video_gen_backend.application.generation import (
     GenerationInputValidator,
     InvalidGenerationInputsError,
-    SubmitGenerationJobUseCase,
+    InvalidOutputCountError,
+    SubmitGenerationRunUseCase,
+    UnsupportedBatchOutputCountError,
     UnsupportedModelKeyError,
     UnsupportedOperationKeyError,
 )
@@ -40,13 +42,13 @@ from ai_video_gen_backend.domain.collection_item import (
 from ai_video_gen_backend.domain.generation import (
     GenerationCapabilityRegistryPort,
     GenerationProviderPort,
-    GenerationRequest,
+    GenerationRunRequest,
 )
 from ai_video_gen_backend.infrastructure.providers.fal import CapabilityRegistryLoadError
 from ai_video_gen_backend.infrastructure.repositories import (
     CollectionItemSqlRepository,
     CollectionSqlRepository,
-    GenerationJobSqlRepository,
+    GenerationRunSqlRepository,
 )
 from ai_video_gen_backend.presentation.api.dependencies import (
     get_app_settings,
@@ -64,8 +66,8 @@ from ai_video_gen_backend.presentation.api.v1.schemas import (
     CollectionItemResponse,
     CollectionResponse,
     CreateCollectionItemRequest,
-    GenerationSubmitRequest,
-    GenerationSubmitResponse,
+    GenerationRunSubmitRequest,
+    GenerationRunSubmitResponse,
 )
 
 router = APIRouter(tags=['collections'])
@@ -305,13 +307,13 @@ def delete_collection_item(
 
 
 @router.post(
-    '/collections/{collection_id}/items/generate',
-    response_model=GenerationSubmitResponse,
+    '/collections/{collection_id}/generation-runs',
+    response_model=GenerationRunSubmitResponse,
     status_code=202,
 )
-def generate_collection_item(
+def create_generation_run(
     collection_id: UUID,
-    request: GenerationSubmitRequest,
+    request: GenerationRunSubmitRequest,
     settings: Settings = Depends(get_app_settings),
     session: Session = Depends(get_db_session),
     generation_provider: GenerationProviderPort = Depends(get_generation_provider),
@@ -319,7 +321,7 @@ def generate_collection_item(
         get_generation_capability_registry
     ),
     input_validator: GenerationInputValidator = Depends(get_generation_input_validator),
-) -> GenerationSubmitResponse:
+) -> GenerationRunSubmitResponse:
     collection_use_case = GetCollectionByIdUseCase(CollectionSqlRepository(session))
     collection = collection_use_case.execute(collection_id)
     if collection is None:
@@ -332,22 +334,23 @@ def generate_collection_item(
             message='Collection does not belong to projectId in payload',
         )
 
-    use_case = SubmitGenerationJobUseCase(
+    use_case = SubmitGenerationRunUseCase(
         collection_item_repository=CollectionItemSqlRepository(session),
-        generation_job_repository=GenerationJobSqlRepository(session),
+        generation_run_repository=GenerationRunSqlRepository(session),
         generation_provider=generation_provider,
         capability_registry=capability_registry,
         input_validator=input_validator,
         webhook_url=_build_generation_webhook_url(settings),
     )
     try:
-        generation_job = use_case.execute(
-            GenerationRequest(
+        submission = use_case.execute(
+            GenerationRunRequest(
                 project_id=request.project_id,
                 collection_id=collection_id,
                 model_key=request.model_key,
                 operation_key=request.operation_key,
                 inputs=request.inputs,
+                output_count=request.output_count,
                 idempotency_key=request.idempotency_key,
             )
         )
@@ -362,6 +365,18 @@ def generate_collection_item(
             status_code=400,
             code='unsupported_operation_key',
             message='Unsupported operation key for model',
+        ) from exc
+    except InvalidOutputCountError as exc:
+        raise ApiError(
+            status_code=400,
+            code='invalid_output_count',
+            message='Output count must be between 1 and 4',
+        ) from exc
+    except UnsupportedBatchOutputCountError as exc:
+        raise ApiError(
+            status_code=400,
+            code='unsupported_batch_output_count',
+            message='Selected model operation does not support multi-output generation',
         ) from exc
     except InvalidGenerationInputsError as exc:
         raise ApiError(
@@ -384,7 +399,7 @@ def generate_collection_item(
             details={'reason': str(exc.__class__.__name__)},
         ) from exc
 
-    return GenerationSubmitResponse.from_domain(generation_job)
+    return GenerationRunSubmitResponse.from_domain(submission)
 
 
 def _parse_upload_metadata(metadata_raw: str | None) -> JsonObject | None:

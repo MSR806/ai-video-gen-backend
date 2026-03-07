@@ -8,29 +8,36 @@ from .capabilities import (
 from .downloader import MediaDownloaderPort, MediaDownloadError
 from .entities import (
     GeneratedOutput,
-    GenerationJob,
-    GenerationRequest,
-    GenerationStatus,
+    GenerationRun,
+    GenerationRunOutput,
+    GenerationRunOutputStatus,
+    GenerationRunRequest,
+    GenerationRunStatus,
+    GenerationRunSubmission,
     ProviderResult,
     ProviderStatus,
     ProviderSubmission,
     ProviderWebhookEvent,
+    SubmittedRunOutput,
 )
 from .ports import (
     GenerationCapabilityRegistryPort,
-    GenerationJobRepositoryPort,
     GenerationProviderPort,
+    GenerationRunRepositoryPort,
 )
 
 __all__ = [
     'GeneratedOutput',
     'GenerationCapabilities',
     'GenerationCapabilityRegistryPort',
-    'GenerationJob',
-    'GenerationJobRepositoryPort',
     'GenerationProviderPort',
-    'GenerationRequest',
-    'GenerationStatus',
+    'GenerationRun',
+    'GenerationRunOutput',
+    'GenerationRunOutputStatus',
+    'GenerationRunRepositoryPort',
+    'GenerationRunRequest',
+    'GenerationRunStatus',
+    'GenerationRunSubmission',
     'InputFieldCapability',
     'MediaDownloadError',
     'MediaDownloaderPort',
@@ -41,4 +48,5 @@ __all__ = [
     'ProviderSubmission',
     'ProviderWebhookEvent',
     'ResolvedGenerationOperation',
+    'SubmittedRunOutput',
 ]

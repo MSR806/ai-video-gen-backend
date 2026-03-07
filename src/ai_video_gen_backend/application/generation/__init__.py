@@ -1,10 +1,12 @@
 from .finalize_generation import GenerationFinalizationError, GenerationFinalizer
 from .get_generation_capabilities import GetGenerationCapabilitiesUseCase
-from .get_generation_job import GetGenerationJobUseCase
+from .get_generation_run import GetGenerationRunUseCase
 from .handle_fal_webhook import HandleFalWebhookUseCase
-from .reconcile_generation_job import ReconcileGenerationJobUseCase
-from .submit_generation_job import (
-    SubmitGenerationJobUseCase,
+from .reconcile_generation_run import ReconcileGenerationRunUseCase
+from .submit_generation_run import (
+    InvalidOutputCountError,
+    SubmitGenerationRunUseCase,
+    UnsupportedBatchOutputCountError,
     UnsupportedModelKeyError,
     UnsupportedOperationKeyError,
 )
@@ -18,11 +20,13 @@ __all__ = [
     'GenerationFinalizer',
     'GenerationInputValidator',
     'GetGenerationCapabilitiesUseCase',
-    'GetGenerationJobUseCase',
+    'GetGenerationRunUseCase',
     'HandleFalWebhookUseCase',
     'InvalidGenerationInputsError',
-    'ReconcileGenerationJobUseCase',
-    'SubmitGenerationJobUseCase',
+    'InvalidOutputCountError',
+    'ReconcileGenerationRunUseCase',
+    'SubmitGenerationRunUseCase',
+    'UnsupportedBatchOutputCountError',
     'UnsupportedModelKeyError',
     'UnsupportedOperationKeyError',
 ]

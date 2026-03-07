@@ -12,7 +12,6 @@ from ai_video_gen_backend.infrastructure.repositories import CollectionItemSqlRe
 def test_collection_item_repository_maps_storage_fields(db_session: Session) -> None:
     project_id = uuid4()
     collection_id = uuid4()
-    job_id = uuid4()
 
     db_session.add(
         ProjectModel(
@@ -43,7 +42,6 @@ def test_collection_item_repository_maps_storage_fields(db_session: Session) -> 
         url='http://localhost:9000/ai-video-gen-media/key.jpg',
         metadata={'width': 100, 'height': 200, 'format': 'jpg', 'thumbnailUrl': 'thumb'},
         generation_source='upload',
-        job_id=job_id,
         storage_provider='s3',
         storage_bucket='ai-video-gen-media',
         storage_key='projects/p/collections/c/key.jpg',
@@ -60,7 +58,7 @@ def test_collection_item_repository_maps_storage_fields(db_session: Session) -> 
     assert fetched.storage_key == 'projects/p/collections/c/key.jpg'
     assert fetched.mime_type == 'image/jpeg'
     assert fetched.size_bytes == 1234
-    assert fetched.job_id == job_id
+    assert fetched.run_id is None
 
 
 def test_collection_item_repository_delete_item_removes_record(db_session: Session) -> None:

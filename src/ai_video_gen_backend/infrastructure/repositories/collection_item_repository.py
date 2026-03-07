@@ -33,6 +33,24 @@ class CollectionItemSqlRepository:
         record = self._session.execute(stmt).scalar_one_or_none()
         return self._to_domain(record) if record is not None else None
 
+    def get_items_by_run_id(self, run_id: UUID) -> list[CollectionItem]:
+        stmt = (
+            select(CollectionItemModel)
+            .where(CollectionItemModel.run_id == run_id)
+            .order_by(CollectionItemModel.created_at.asc())
+        )
+        records = self._session.execute(stmt).scalars().all()
+        return [self._to_domain(record) for record in records]
+
+    def get_item_by_generation_run_output_id(
+        self, generation_run_output_id: UUID
+    ) -> CollectionItem | None:
+        stmt = select(CollectionItemModel).where(
+            CollectionItemModel.generation_run_output_id == generation_run_output_id
+        )
+        record = self._session.execute(stmt).scalar_one_or_none()
+        return self._to_domain(record) if record is not None else None
+
     def create_item(self, payload: CollectionItemCreationPayload) -> CollectionItem:
         model = CollectionItemModel(
             project_id=payload.project_id,
@@ -45,7 +63,8 @@ class CollectionItemSqlRepository:
             metadata_json=payload.metadata,
             generation_source=payload.generation_source,
             generation_error_message=payload.generation_error_message,
-            job_id=payload.job_id,
+            run_id=payload.run_id,
+            generation_run_output_id=payload.generation_run_output_id,
             storage_provider=payload.storage_provider,
             storage_bucket=payload.storage_bucket,
             storage_key=payload.storage_key,
@@ -65,16 +84,6 @@ class CollectionItemSqlRepository:
         self._session.delete(model)
         self._session.commit()
         return True
-
-    def assign_job_id(self, *, item_id: UUID, job_id: UUID) -> CollectionItem | None:
-        model = self._session.get(CollectionItemModel, item_id)
-        if model is None:
-            return None
-
-        model.job_id = job_id
-        self._session.commit()
-        self._session.refresh(model)
-        return self._to_domain(model)
 
     def mark_generated_item_ready(
         self,
@@ -132,7 +141,8 @@ class CollectionItemSqlRepository:
             metadata=metadata,
             generation_source=model.generation_source,
             generation_error_message=model.generation_error_message,
-            job_id=model.job_id,
+            run_id=model.run_id,
+            generation_run_output_id=model.generation_run_output_id,
             storage_provider=model.storage_provider,
             storage_bucket=model.storage_bucket,
             storage_key=model.storage_key,

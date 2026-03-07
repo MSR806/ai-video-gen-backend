@@ -66,8 +66,14 @@ class FakeCollectionItemRepository:
         del item_id
         return False
 
-    def assign_job_id(self, *, item_id: UUID, job_id: UUID) -> CollectionItem | None:
-        del item_id, job_id
+    def get_items_by_run_id(self, run_id: UUID) -> list[CollectionItem]:
+        del run_id
+        return []
+
+    def get_item_by_generation_run_output_id(
+        self, generation_run_output_id: UUID
+    ) -> CollectionItem | None:
+        del generation_run_output_id
         return None
 
     def mark_generated_item_ready(

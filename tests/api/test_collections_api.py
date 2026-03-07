@@ -483,21 +483,20 @@ def test_get_generation_capabilities_returns_grouped_models(client: TestClient) 
     assert payload['image'][0]['operations'][0]['operationKey']
 
 
-def test_generate_collection_item_returns_async_job(
-    client: TestClient, db_session: Session
-) -> None:
+def test_create_generation_run_returns_async_run(client: TestClient, db_session: Session) -> None:
     ids = seed_baseline_data(db_session)
     fake_provider = FakeGenerationProvider()
     app = _override_generation_dependency(client, fake_provider)
 
     try:
         response = client.post(
-            f'/api/v1/collections/{ids["collection_id"]}/items/generate',
+            f'/api/v1/collections/{ids["collection_id"]}/generation-runs',
             json={
                 'projectId': str(ids['project_id']),
                 'modelKey': 'nano_banana',
                 'operationKey': 'text_to_image',
                 'inputs': {'prompt': 'cinematic wide shot', 'aspect_ratio': '16:9'},
+                'outputCount': 2,
             },
         )
     finally:
@@ -505,22 +504,25 @@ def test_generate_collection_item_returns_async_job(
 
     assert response.status_code == 202
     payload = response.json()
-    assert payload['jobId']
+    assert payload['runId']
     assert payload['status'] in {'QUEUED', 'IN_PROGRESS'}
     assert payload['modelKey'] == 'nano_banana'
     assert payload['operationKey'] == 'text_to_image'
+    assert len(payload['outputs']) == 2
     assert fake_provider.submitted_inputs[-1][0] == 'fal-ai/nano-banana'
     assert fake_provider.submitted_inputs[-1][1]['prompt'] == 'cinematic wide shot'
+    assert fake_provider.submitted_inputs[-1][1]['num_images'] == 2
 
     items_response = client.get(f'/api/v1/collections/{ids["collection_id"]}/items')
     assert items_response.status_code == 200
-    generated_item = next(
-        item for item in items_response.json()['items'] if item.get('jobId') == payload['jobId']
-    )
-    assert generated_item['status'] == 'GENERATING'
+    generated_items = [
+        item for item in items_response.json()['items'] if item.get('runId') == payload['runId']
+    ]
+    assert len(generated_items) == 2
+    assert all(item['status'] == 'GENERATING' for item in generated_items)
 
 
-def test_generate_collection_item_with_duplicate_idempotency_key_returns_existing_job(
+def test_create_generation_run_with_duplicate_idempotency_key_returns_existing_run(
     client: TestClient,
     db_session: Session,
 ) -> None:
@@ -538,11 +540,11 @@ def test_generate_collection_item_with_duplicate_idempotency_key_returns_existin
 
     try:
         first = client.post(
-            f'/api/v1/collections/{ids["collection_id"]}/items/generate',
+            f'/api/v1/collections/{ids["collection_id"]}/generation-runs',
             json=request_payload,
         )
         second = client.post(
-            f'/api/v1/collections/{ids["collection_id"]}/items/generate',
+            f'/api/v1/collections/{ids["collection_id"]}/generation-runs',
             json=request_payload,
         )
     finally:
@@ -550,11 +552,12 @@ def test_generate_collection_item_with_duplicate_idempotency_key_returns_existin
 
     assert first.status_code == 202
     assert second.status_code == 202
-    assert first.json()['jobId'] == second.json()['jobId']
+    assert first.json()['runId'] == second.json()['runId']
+    assert first.json()['outputs'] == second.json()['outputs']
     assert len(fake_provider.submitted_inputs) == 1
 
 
-def test_generate_collection_item_image_to_image_accepts_multiple_source_urls(
+def test_create_generation_run_image_to_image_accepts_multiple_source_urls(
     client: TestClient,
     db_session: Session,
 ) -> None:
@@ -569,7 +572,7 @@ def test_generate_collection_item_image_to_image_accepts_multiple_source_urls(
 
     try:
         response = client.post(
-            f'/api/v1/collections/{ids["collection_id"]}/items/generate',
+            f'/api/v1/collections/{ids["collection_id"]}/generation-runs',
             json={
                 'projectId': str(ids['project_id']),
                 'modelKey': 'nano_banana',
@@ -584,14 +587,14 @@ def test_generate_collection_item_image_to_image_accepts_multiple_source_urls(
     assert fake_provider.submitted_inputs[-1][1]['image_urls'] == source_urls
 
 
-def test_generate_collection_item_image_to_image_requires_source_urls(
+def test_create_generation_run_image_to_image_requires_source_urls(
     client: TestClient,
     db_session: Session,
 ) -> None:
     ids = seed_baseline_data(db_session)
 
     response = client.post(
-        f'/api/v1/collections/{ids["collection_id"]}/items/generate',
+        f'/api/v1/collections/{ids["collection_id"]}/generation-runs',
         json={
             'projectId': str(ids['project_id']),
             'modelKey': 'nano_banana',
@@ -604,14 +607,14 @@ def test_generate_collection_item_image_to_image_requires_source_urls(
     assert response.json()['error']['code'] == 'schema_validation_failed'
 
 
-def test_generate_collection_item_text_to_image_rejects_unknown_input_fields(
+def test_create_generation_run_text_to_image_rejects_unknown_input_fields(
     client: TestClient,
     db_session: Session,
 ) -> None:
     ids = seed_baseline_data(db_session)
 
     response = client.post(
-        f'/api/v1/collections/{ids["collection_id"]}/items/generate',
+        f'/api/v1/collections/{ids["collection_id"]}/generation-runs',
         json={
             'projectId': str(ids['project_id']),
             'modelKey': 'nano_banana',
@@ -624,14 +627,14 @@ def test_generate_collection_item_text_to_image_rejects_unknown_input_fields(
     assert response.json()['error']['code'] == 'schema_validation_failed'
 
 
-def test_generate_collection_item_rejects_unsupported_operation_key(
+def test_create_generation_run_rejects_unsupported_operation_key(
     client: TestClient,
     db_session: Session,
 ) -> None:
     ids = seed_baseline_data(db_session)
 
     response = client.post(
-        f'/api/v1/collections/{ids["collection_id"]}/items/generate',
+        f'/api/v1/collections/{ids["collection_id"]}/generation-runs',
         json={
             'projectId': str(ids['project_id']),
             'modelKey': 'nano_banana',
@@ -644,11 +647,64 @@ def test_generate_collection_item_rejects_unsupported_operation_key(
     assert response.json()['error']['code'] == 'unsupported_operation_key'
 
 
-def test_get_generation_job_returns_404_when_missing(client: TestClient) -> None:
-    response = client.get('/api/v1/generation-jobs/00000000-0000-0000-0000-000000000000')
+def test_create_generation_run_rejects_unsupported_batch_output_count(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+
+    response = client.post(
+        f'/api/v1/collections/{ids["collection_id"]}/generation-runs',
+        json={
+            'projectId': str(ids['project_id']),
+            'modelKey': 'veo_3_1',
+            'operationKey': 'text_to_video',
+            'inputs': {'prompt': 'Should fail'},
+            'outputCount': 2,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()['error']['code'] == 'unsupported_batch_output_count'
+
+
+def test_get_generation_run_returns_404_when_missing(client: TestClient) -> None:
+    response = client.get('/api/v1/generation-runs/00000000-0000-0000-0000-000000000000')
 
     assert response.status_code == 404
-    assert response.json()['error']['code'] == 'generation_job_not_found'
+    assert response.json()['error']['code'] == 'generation_run_not_found'
+
+
+def test_get_generation_run_returns_outputs(client: TestClient, db_session: Session) -> None:
+    ids = seed_baseline_data(db_session)
+    fake_provider = FakeGenerationProvider()
+    app = _override_generation_dependency(client, fake_provider)
+
+    try:
+        submit = client.post(
+            f'/api/v1/collections/{ids["collection_id"]}/generation-runs',
+            json={
+                'projectId': str(ids['project_id']),
+                'modelKey': 'nano_banana',
+                'operationKey': 'text_to_image',
+                'inputs': {'prompt': 'sunset'},
+                'outputCount': 2,
+            },
+        )
+        assert submit.status_code == 202
+        run_id = submit.json()['runId']
+
+        response = client.get(f'/api/v1/generation-runs/{run_id}')
+    finally:
+        app.dependency_overrides.pop(get_generation_provider, None)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['runId'] == run_id
+    assert payload['status'] in {'QUEUED', 'IN_PROGRESS'}
+    assert payload['requestedOutputCount'] == 2
+    assert len(payload['outputs']) == 2
+    assert all(output['collectionItemId'] is not None for output in payload['outputs'])
 
 
 def test_generation_webhook_invalid_token_returns_401(
@@ -665,7 +721,7 @@ def test_generation_webhook_invalid_token_returns_401(
 
     try:
         submit = client.post(
-            f'/api/v1/collections/{ids["collection_id"]}/items/generate',
+            f'/api/v1/collections/{ids["collection_id"]}/generation-runs',
             json={
                 'projectId': str(ids['project_id']),
                 'modelKey': 'nano_banana',
@@ -700,7 +756,7 @@ def test_generation_webhook_failure_marks_placeholder_item_failed(
 
     try:
         submit = client.post(
-            f'/api/v1/collections/{ids["collection_id"]}/items/generate',
+            f'/api/v1/collections/{ids["collection_id"]}/generation-runs',
             json={
                 'projectId': str(ids['project_id']),
                 'modelKey': 'nano_banana',
@@ -709,7 +765,8 @@ def test_generation_webhook_failure_marks_placeholder_item_failed(
             },
         )
         assert submit.status_code == 202
-        job_id = submit.json()['jobId']
+        run_id = submit.json()['runId']
+        placeholder_item_id = submit.json()['outputs'][0]['collectionItemId']
 
         webhook = client.post(
             '/api/v1/provider-webhooks/fal?token=',
@@ -725,9 +782,10 @@ def test_generation_webhook_failure_marks_placeholder_item_failed(
     items_response = client.get(f'/api/v1/collections/{ids["collection_id"]}/items')
     assert items_response.status_code == 200
     generated_item = next(
-        item for item in items_response.json()['items'] if item['jobId'] == job_id
+        item for item in items_response.json()['items'] if item['id'] == placeholder_item_id
     )
     assert generated_item['status'] == 'FAILED'
+    assert generated_item['runId'] == run_id
 
 
 def test_create_collection_item_project_mismatch_returns_400(

@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
-from sqlalchemy import DateTime, String, Uuid, func
+from sqlalchemy import DateTime, Integer, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ai_video_gen_backend.domain.collection_item import JsonValue
@@ -12,35 +12,34 @@ from ai_video_gen_backend.infrastructure.db.base import Base
 from ai_video_gen_backend.infrastructure.db.types import JSONType
 
 
-class GenerationJobModel(Base):
-    __tablename__ = 'generation_jobs'
+class GenerationRunModel(Base):
+    __tablename__ = 'generation_runs'
     __table_args__ = (
         sa.CheckConstraint(
-            "status IN ('QUEUED', 'IN_PROGRESS', 'SUCCEEDED', 'FAILED', 'CANCELLED')",
-            name='ck_generation_jobs_status',
+            (
+                'status IN '
+                "('QUEUED', 'IN_PROGRESS', 'SUCCEEDED', 'PARTIAL_FAILED', 'FAILED', 'CANCELLED')"
+            ),
+            name='ck_generation_runs_status',
+        ),
+        sa.CheckConstraint(
+            'requested_output_count > 0',
+            name='ck_generation_runs_requested_output_count_positive',
         ),
         sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
-        sa.ForeignKeyConstraint(['collection_id'], ['collections.id'], ondelete='CASCADE'),
-        sa.ForeignKeyConstraint(
-            ['collection_item_id'],
-            ['collection_items.id'],
-            ondelete='SET NULL',
-        ),
-        sa.Index('ix_generation_jobs_project_id', 'project_id'),
-        sa.Index('ix_generation_jobs_collection_id', 'collection_id'),
-        sa.Index('ix_generation_jobs_status', 'status'),
-        sa.Index('ix_generation_jobs_status_updated_at', 'status', sa.desc('updated_at')),
+        sa.Index('ix_generation_runs_project_id', 'project_id'),
+        sa.Index('ix_generation_runs_status', 'status'),
+        sa.Index('ix_generation_runs_status_updated_at', 'status', sa.desc('updated_at')),
         sa.Index(
-            'uq_generation_jobs_provider_request_id',
+            'uq_generation_runs_provider_request_id',
             'provider_request_id',
             unique=True,
             postgresql_where=sa.text('provider_request_id IS NOT NULL'),
             sqlite_where=sa.text('provider_request_id IS NOT NULL'),
         ),
         sa.Index(
-            'uq_generation_jobs_idempotency',
+            'uq_generation_runs_idempotency',
             'project_id',
-            'collection_id',
             'idempotency_key',
             unique=True,
             postgresql_where=sa.text('idempotency_key IS NOT NULL'),
@@ -50,17 +49,13 @@ class GenerationJobModel(Base):
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     project_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
-    collection_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
-    collection_item_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     operation_key: Mapped[str] = mapped_column(String(64), nullable=False)
     provider: Mapped[str] = mapped_column(String(32), nullable=False)
     model_key: Mapped[str] = mapped_column(String(128), nullable=False)
     endpoint_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
+    requested_output_count: Mapped[int] = mapped_column(Integer, nullable=False)
     inputs_json: Mapped[dict[str, JsonValue]] = mapped_column(JSONType, nullable=False)
-    outputs_json: Mapped[list[dict[str, JsonValue]]] = mapped_column(
-        JSONType, nullable=False, default=list
-    )
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     provider_request_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     provider_response_json: Mapped[dict[str, JsonValue] | None] = mapped_column(

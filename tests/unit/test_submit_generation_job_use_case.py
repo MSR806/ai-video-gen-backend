@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Literal
 from uuid import UUID, uuid4
 
 import pytest
 
-from ai_video_gen_backend.application.generation.submit_generation_job import (
-    SubmitGenerationJobUseCase,
-    UnsupportedModelKeyError,
-    UnsupportedOperationKeyError,
+from ai_video_gen_backend.application.generation.submit_generation_run import (
+    InvalidOutputCountError,
+    SubmitGenerationRunUseCase,
+    UnsupportedBatchOutputCountError,
 )
 from ai_video_gen_backend.application.generation.validate_generation_inputs import (
     GenerationInputValidator,
@@ -21,26 +20,20 @@ from ai_video_gen_backend.domain.collection_item import (
 )
 from ai_video_gen_backend.domain.generation import (
     GenerationCapabilities,
-    GenerationJob,
-    GenerationRequest,
-    ModelCapability,
-    OperationCapability,
+    GenerationRun,
+    GenerationRunOutput,
+    GenerationRunRequest,
     ProviderResult,
     ProviderStatus,
     ProviderSubmission,
     ProviderWebhookEvent,
     ResolvedGenerationOperation,
 )
-from ai_video_gen_backend.domain.types import JsonObject
 
 
 class FakeCollectionItemRepository:
-    def __init__(self, *, assign_returns_none: bool = False) -> None:
-        self.assign_returns_none = assign_returns_none
-        self.created_payload: CollectionItemCreationPayload | None = None
-        self.assigned: list[tuple[UUID, UUID]] = []
-        self.failed_calls: list[tuple[UUID, str]] = []
-        self.created_item_id = uuid4()
+    def __init__(self) -> None:
+        self.created_payloads: list[CollectionItemCreationPayload] = []
 
     def get_items_by_collection_id(self, collection_id: UUID) -> list[CollectionItem]:
         del collection_id
@@ -50,11 +43,21 @@ class FakeCollectionItemRepository:
         del item_id
         return None
 
+    def get_items_by_run_id(self, run_id: UUID) -> list[CollectionItem]:
+        del run_id
+        return []
+
+    def get_item_by_generation_run_output_id(
+        self, generation_run_output_id: UUID
+    ) -> CollectionItem | None:
+        del generation_run_output_id
+        return None
+
     def create_item(self, payload: CollectionItemCreationPayload) -> CollectionItem:
-        self.created_payload = payload
+        self.created_payloads.append(payload)
         now = datetime.now(UTC)
         return CollectionItem(
-            id=self.created_item_id,
+            id=uuid4(),
             project_id=payload.project_id,
             collection_id=payload.collection_id,
             media_type=payload.media_type,
@@ -67,6 +70,8 @@ class FakeCollectionItemRepository:
             generation_error_message=payload.generation_error_message,
             created_at=now,
             updated_at=now,
+            run_id=payload.run_id,
+            generation_run_output_id=payload.generation_run_output_id,
             storage_provider=payload.storage_provider,
             storage_bucket=payload.storage_bucket,
             storage_key=payload.storage_key,
@@ -77,29 +82,6 @@ class FakeCollectionItemRepository:
     def delete_item(self, item_id: UUID) -> bool:
         del item_id
         return False
-
-    def assign_job_id(self, *, item_id: UUID, job_id: UUID) -> CollectionItem | None:
-        self.assigned.append((item_id, job_id))
-        if self.assign_returns_none:
-            return None
-
-        now = datetime.now(UTC)
-        return CollectionItem(
-            id=item_id,
-            project_id=uuid4(),
-            collection_id=uuid4(),
-            media_type='image',
-            status='GENERATING',
-            name='Generated',
-            description='AI generation in progress',
-            url=None,
-            metadata={'thumbnailUrl': '', 'width': 0, 'height': 0, 'format': 'png'},
-            generation_source='fal',
-            generation_error_message=None,
-            created_at=now,
-            updated_at=now,
-            job_id=job_id,
-        )
 
     def mark_generated_item_ready(
         self,
@@ -126,47 +108,41 @@ class FakeCollectionItemRepository:
         return None
 
     def mark_generated_item_failed(
-        self,
-        *,
-        item_id: UUID,
-        error_message: str,
+        self, *, item_id: UUID, error_message: str
     ) -> CollectionItem | None:
-        self.failed_calls.append((item_id, error_message))
+        del item_id, error_message
         return None
 
 
-class FakeGenerationJobRepository:
-    def __init__(self, *, existing_by_idempotency: GenerationJob | None = None) -> None:
-        self.existing_by_idempotency = existing_by_idempotency
-        self.created_jobs: list[GenerationJob] = []
-        self.failed_calls: list[dict[str, object]] = []
+class FakeGenerationRunRepository:
+    def __init__(self, *, existing: GenerationRun | None = None) -> None:
+        self.existing = existing
+        self.created_run: GenerationRun | None = None
+        self.created_outputs: list[GenerationRunOutput] = []
 
-    def create_job(
+    def create_run(
         self,
         *,
         project_id: UUID,
-        collection_id: UUID,
-        collection_item_id: UUID,
         operation_key: str,
         provider: str,
         model_key: str,
         endpoint_id: str,
+        requested_output_count: int,
         inputs_json: dict[str, object],
         idempotency_key: str | None,
-    ) -> GenerationJob:
+    ) -> GenerationRun:
         now = datetime.now(UTC)
-        job = GenerationJob(
+        run = GenerationRun(
             id=uuid4(),
             project_id=project_id,
-            collection_id=collection_id,
-            collection_item_id=collection_item_id,
             operation_key=operation_key,
             provider=provider,
             model_key=model_key,
             endpoint_id=endpoint_id,
             status='QUEUED',
+            requested_output_count=requested_output_count,
             inputs_json=inputs_json,
-            outputs_json=[],
             provider_request_id=None,
             provider_response_json=None,
             idempotency_key=idempotency_key,
@@ -177,115 +153,157 @@ class FakeGenerationJobRepository:
             created_at=now,
             updated_at=now,
         )
-        self.created_jobs.append(job)
-        return job
+        self.created_run = run
+        return run
 
-    def get_by_id(self, job_id: UUID) -> GenerationJob | None:
-        for job in self.created_jobs:
-            if job.id == job_id:
-                return job
+    def create_run_outputs(self, *, run_id: UUID, output_count: int) -> list[GenerationRunOutput]:
+        now = datetime.now(UTC)
+        outputs = [
+            GenerationRunOutput(
+                id=uuid4(),
+                run_id=run_id,
+                output_index=index,
+                status='QUEUED',
+                provider_output_json=None,
+                stored_output_json=None,
+                error_code=None,
+                error_message=None,
+                created_at=now,
+                updated_at=now,
+            )
+            for index in range(output_count)
+        ]
+        self.created_outputs = outputs
+        return outputs
+
+    def get_run_by_id(self, run_id: UUID) -> GenerationRun | None:
+        if self.created_run is not None and self.created_run.id == run_id:
+            return self.created_run
         return None
 
-    def get_by_provider_request_id(self, provider_request_id: str) -> GenerationJob | None:
+    def get_run_by_provider_request_id(self, provider_request_id: str) -> GenerationRun | None:
         del provider_request_id
         return None
 
-    def get_by_idempotency_key(
+    def get_run_by_idempotency_key(
         self,
         *,
         project_id: UUID,
-        collection_id: UUID,
         idempotency_key: str,
-    ) -> GenerationJob | None:
-        del project_id, collection_id, idempotency_key
-        return self.existing_by_idempotency
+    ) -> GenerationRun | None:
+        del project_id, idempotency_key
+        return self.existing
 
-    def mark_submitted(self, job_id: UUID, *, provider_request_id: str) -> GenerationJob:
-        base = self.get_by_id(job_id)
-        assert base is not None
-        return GenerationJob(
-            id=base.id,
-            project_id=base.project_id,
-            collection_id=base.collection_id,
-            collection_item_id=base.collection_item_id,
-            operation_key=base.operation_key,
-            provider=base.provider,
-            model_key=base.model_key,
-            endpoint_id=base.endpoint_id,
+    def list_outputs_by_run_id(self, run_id: UUID) -> list[GenerationRunOutput]:
+        del run_id
+        return self.created_outputs
+
+    def mark_run_submitted(self, run_id: UUID, *, provider_request_id: str) -> GenerationRun:
+        assert self.created_run is not None
+        assert self.created_run.id == run_id
+        now = datetime.now(UTC)
+        return GenerationRun(
+            id=self.created_run.id,
+            project_id=self.created_run.project_id,
+            operation_key=self.created_run.operation_key,
+            provider=self.created_run.provider,
+            model_key=self.created_run.model_key,
+            endpoint_id=self.created_run.endpoint_id,
             status='IN_PROGRESS',
-            inputs_json=base.inputs_json,
-            outputs_json=base.outputs_json,
+            requested_output_count=self.created_run.requested_output_count,
+            inputs_json=self.created_run.inputs_json,
             provider_request_id=provider_request_id,
             provider_response_json=None,
-            idempotency_key=base.idempotency_key,
+            idempotency_key=self.created_run.idempotency_key,
             error_code=None,
             error_message=None,
-            submitted_at=datetime.now(UTC),
+            submitted_at=now,
             completed_at=None,
-            created_at=base.created_at,
-            updated_at=datetime.now(UTC),
+            created_at=self.created_run.created_at,
+            updated_at=now,
         )
 
-    def mark_in_progress(self, job_id: UUID) -> GenerationJob:
-        base = self.get_by_id(job_id)
-        assert base is not None
-        return base
-
-    def mark_succeeded(
-        self,
-        job_id: UUID,
-        *,
-        provider_response_json: dict[str, object],
-        outputs_json: list[dict[str, object]],
-    ) -> GenerationJob:
-        del job_id, provider_response_json, outputs_json
+    def mark_run_in_progress(self, run_id: UUID) -> GenerationRun:
+        del run_id
         raise NotImplementedError
 
-    def mark_failed(
+    def mark_run_succeeded(
+        self, run_id: UUID, *, provider_response_json: dict[str, object]
+    ) -> GenerationRun:
+        del run_id, provider_response_json
+        raise NotImplementedError
+
+    def mark_run_partial_failed(
+        self, run_id: UUID, *, provider_response_json: dict[str, object], error_message: str
+    ) -> GenerationRun:
+        del run_id, provider_response_json, error_message
+        raise NotImplementedError
+
+    def mark_run_failed(
         self,
-        job_id: UUID,
+        run_id: UUID,
         *,
         error_code: str,
         error_message: str,
         provider_response_json: dict[str, object] | None = None,
-    ) -> GenerationJob:
-        self.failed_calls.append(
-            {
-                'job_id': job_id,
-                'error_code': error_code,
-                'error_message': error_message,
-                'provider_response_json': provider_response_json,
-            }
-        )
-        base = self.get_by_id(job_id)
-        assert base is not None
-        return GenerationJob(
-            id=base.id,
-            project_id=base.project_id,
-            collection_id=base.collection_id,
-            collection_item_id=base.collection_item_id,
-            operation_key=base.operation_key,
-            provider=base.provider,
-            model_key=base.model_key,
-            endpoint_id=base.endpoint_id,
+    ) -> GenerationRun:
+        assert self.created_run is not None
+        now = datetime.now(UTC)
+        return GenerationRun(
+            id=run_id,
+            project_id=self.created_run.project_id,
+            operation_key=self.created_run.operation_key,
+            provider=self.created_run.provider,
+            model_key=self.created_run.model_key,
+            endpoint_id=self.created_run.endpoint_id,
             status='FAILED',
-            inputs_json=base.inputs_json,
-            outputs_json=base.outputs_json,
-            provider_request_id=base.provider_request_id,
+            requested_output_count=self.created_run.requested_output_count,
+            inputs_json=self.created_run.inputs_json,
+            provider_request_id=self.created_run.provider_request_id,
             provider_response_json=provider_response_json,
-            idempotency_key=base.idempotency_key,
+            idempotency_key=self.created_run.idempotency_key,
             error_code=error_code,
             error_message=error_message,
-            submitted_at=base.submitted_at,
-            completed_at=datetime.now(UTC),
-            created_at=base.created_at,
-            updated_at=datetime.now(UTC),
+            submitted_at=self.created_run.submitted_at,
+            completed_at=now,
+            created_at=self.created_run.created_at,
+            updated_at=now,
         )
 
+    def mark_run_cancelled(
+        self,
+        run_id: UUID,
+        *,
+        error_message: str,
+        provider_response_json: dict[str, object] | None = None,
+    ) -> GenerationRun:
+        del run_id, error_message, provider_response_json
+        raise NotImplementedError
 
-class FakeGenerationProvider:
-    def __init__(self, *, error: Exception | None = None) -> None:
-        self.error = error
+    def mark_output_ready(
+        self,
+        *,
+        output_id: UUID,
+        provider_output_json: dict[str, object],
+        stored_output_json: dict[str, object],
+    ) -> GenerationRunOutput:
+        del output_id, provider_output_json, stored_output_json
+        raise NotImplementedError
+
+    def mark_output_failed(
+        self,
+        *,
+        output_id: UUID,
+        error_code: str,
+        error_message: str,
+        provider_output_json: dict[str, object] | None = None,
+    ) -> GenerationRunOutput:
+        del output_id, error_code, error_message, provider_output_json
+        raise NotImplementedError
+
+
+class FakeProvider:
+    def __init__(self) -> None:
         self.submit_calls: list[dict[str, object]] = []
 
     def submit(
@@ -302,9 +320,7 @@ class FakeGenerationProvider:
                 'webhook_url': webhook_url,
             }
         )
-        if self.error is not None:
-            raise self.error
-        return ProviderSubmission(provider_request_id='req-123')
+        return ProviderSubmission(provider_request_id='provider-req-1')
 
     def status(self, *, endpoint_id: str, provider_request_id: str) -> ProviderStatus:
         del endpoint_id, provider_request_id
@@ -312,7 +328,12 @@ class FakeGenerationProvider:
 
     def result(self, *, endpoint_id: str, provider_request_id: str) -> ProviderResult:
         del endpoint_id, provider_request_id
-        return ProviderResult(status='FAILED', outputs=[], raw_response={})
+        return ProviderResult(
+            status='FAILED',
+            outputs=[],
+            raw_response={},
+            error_message='unsupported',
+        )
 
     def cancel(self, *, endpoint_id: str, provider_request_id: str) -> None:
         del endpoint_id, provider_request_id
@@ -323,294 +344,115 @@ class FakeGenerationProvider:
 
 
 class FakeCapabilityRegistry:
-    def __init__(
-        self,
-        *,
-        has_model: bool,
-        resolved_operation: ResolvedGenerationOperation | None,
-    ) -> None:
-        self.has_model_value = has_model
-        self.resolved_operation = resolved_operation
+    def __init__(self, *, supports_batch: bool) -> None:
+        self.supports_batch = supports_batch
 
     def list_capabilities(self) -> GenerationCapabilities:
-        model = ModelCapability(
-            model='Nano Banana',
-            model_key='nano_banana',
-            provider='fal',
-            media_type='image',
-            operations=[
-                OperationCapability(
-                    operation_key='text_to_image',
-                    endpoint_id='fal-ai/nano-banana',
-                    required=['prompt'],
-                    input_schema={'type': 'object'},
-                    fields=[],
-                )
-            ],
-        )
-        return GenerationCapabilities(image=[model], video=[])
+        return GenerationCapabilities(image=[], video=[])
 
     def has_model(self, *, model_key: str) -> bool:
-        del model_key
-        return self.has_model_value
+        return model_key == 'nano_banana'
 
     def resolve_operation(
-        self,
-        *,
-        model_key: str,
-        operation_key: str,
+        self, *, model_key: str, operation_key: str
     ) -> ResolvedGenerationOperation | None:
-        del model_key, operation_key
-        return self.resolved_operation
+        if model_key != 'nano_banana' or operation_key != 'text_to_image':
+            return None
+
+        properties: dict[str, object] = {'prompt': {'type': 'string'}}
+        if self.supports_batch:
+            properties['num_images'] = {'type': 'integer', 'default': 1}
+
+        return ResolvedGenerationOperation(
+            model_key='nano_banana',
+            model_display_name='Nano Banana',
+            provider='fal',
+            media_type='image',
+            operation_key='text_to_image',
+            endpoint_id='fal-ai/nano-banana',
+            input_schema={
+                'type': 'object',
+                'required': ['prompt'],
+                'properties': properties,
+                'additionalProperties': False,
+            },
+        )
 
 
-class FakeInputValidator(GenerationInputValidator):
-    def __init__(self, *, error: Exception | None = None) -> None:
-        self.error = error
-        self.calls: list[dict[str, JsonObject]] = []
-
-    def validate(self, *, inputs: JsonObject, schema: JsonObject) -> None:
-        self.calls.append({'inputs': inputs, 'schema': schema})
-        if self.error is not None:
-            raise self.error
-
-
-def _resolved_operation(
-    *, media_type: Literal['image', 'video'] = 'image'
-) -> ResolvedGenerationOperation:
-    return ResolvedGenerationOperation(
-        model_key='nano_banana',
-        model_display_name='Nano Banana',
-        provider='fal',
-        media_type=media_type,
-        operation_key='text_to_image',
-        endpoint_id='fal-ai/nano-banana',
-        input_schema={
-            'type': 'object',
-            'required': ['prompt'],
-            'properties': {'prompt': {'type': 'string'}},
-            'additionalProperties': False,
-        },
-    )
-
-
-def _generation_request(
+def _build_use_case(
     *,
-    prompt: JsonValue,
-    idempotency_key: str | None = None,
-) -> GenerationRequest:
-    return GenerationRequest(
-        project_id=uuid4(),
-        collection_id=uuid4(),
-        model_key='nano_banana',
-        operation_key='text_to_image',
-        inputs={'prompt': prompt},
-        idempotency_key=idempotency_key,
+    supports_batch: bool,
+) -> tuple[
+    SubmitGenerationRunUseCase,
+    FakeProvider,
+    FakeCollectionItemRepository,
+    FakeGenerationRunRepository,
+]:
+    collection_repo = FakeCollectionItemRepository()
+    run_repo = FakeGenerationRunRepository()
+    provider = FakeProvider()
+    use_case = SubmitGenerationRunUseCase(
+        collection_item_repository=collection_repo,
+        generation_run_repository=run_repo,
+        generation_provider=provider,
+        capability_registry=FakeCapabilityRegistry(supports_batch=supports_batch),
+        input_validator=GenerationInputValidator(),
+        webhook_url='https://webhook.test/fal',
     )
+    return use_case, provider, collection_repo, run_repo
 
 
-def _existing_job() -> GenerationJob:
-    now = datetime.now(UTC)
-    return GenerationJob(
-        id=uuid4(),
+def test_submit_generation_run_creates_outputs_and_placeholders() -> None:
+    use_case, provider, collection_repo, run_repo = _build_use_case(supports_batch=True)
+    request = GenerationRunRequest(
         project_id=uuid4(),
         collection_id=uuid4(),
-        collection_item_id=uuid4(),
-        operation_key='text_to_image',
-        provider='fal',
         model_key='nano_banana',
-        endpoint_id='fal-ai/nano-banana',
-        status='IN_PROGRESS',
-        inputs_json={'prompt': 'cat'},
-        outputs_json=[],
-        provider_request_id='req-existing',
-        provider_response_json=None,
+        operation_key='text_to_image',
+        inputs={'prompt': 'a cinematic portrait'},
+        output_count=2,
         idempotency_key='idem-1',
-        error_code=None,
-        error_message=None,
-        submitted_at=now,
-        completed_at=None,
-        created_at=now,
-        updated_at=now,
     )
 
+    submission = use_case.execute(request)
 
-def test_execute_returns_existing_idempotent_job_without_submitting() -> None:
-    existing = _existing_job()
-    collection_repo = FakeCollectionItemRepository()
-    job_repo = FakeGenerationJobRepository(existing_by_idempotency=existing)
-    provider = FakeGenerationProvider()
-    capability_registry = FakeCapabilityRegistry(
-        has_model=True,
-        resolved_operation=_resolved_operation(),
-    )
-    validator = FakeInputValidator()
-    use_case = SubmitGenerationJobUseCase(
-        collection_repo,
-        job_repo,
-        provider,
-        capability_registry,
-        validator,
-        webhook_url='https://backend.test/api/v1/provider/fal/webhook',
-    )
-
-    result = use_case.execute(_generation_request(prompt='a cat', idempotency_key='idem-1'))
-
-    assert result == existing
-    assert collection_repo.created_payload is None
-    assert provider.submit_calls == []
-
-
-def test_execute_raises_for_unsupported_model() -> None:
-    use_case = SubmitGenerationJobUseCase(
-        FakeCollectionItemRepository(),
-        FakeGenerationJobRepository(),
-        FakeGenerationProvider(),
-        FakeCapabilityRegistry(has_model=False, resolved_operation=_resolved_operation()),
-        FakeInputValidator(),
-        webhook_url='https://backend.test/api/v1/provider/fal/webhook',
-    )
-
-    with pytest.raises(UnsupportedModelKeyError):
-        use_case.execute(_generation_request(prompt='a cat'))
-
-
-def test_execute_raises_for_unsupported_operation() -> None:
-    use_case = SubmitGenerationJobUseCase(
-        FakeCollectionItemRepository(),
-        FakeGenerationJobRepository(),
-        FakeGenerationProvider(),
-        FakeCapabilityRegistry(has_model=True, resolved_operation=None),
-        FakeInputValidator(),
-        webhook_url='https://backend.test/api/v1/provider/fal/webhook',
-    )
-
-    with pytest.raises(UnsupportedOperationKeyError):
-        use_case.execute(_generation_request(prompt='a cat'))
-
-
-def test_execute_validates_inputs_and_submits_provider_job() -> None:
-    collection_repo = FakeCollectionItemRepository()
-    job_repo = FakeGenerationJobRepository()
-    provider = FakeGenerationProvider()
-    capability_registry = FakeCapabilityRegistry(
-        has_model=True, resolved_operation=_resolved_operation()
-    )
-    validator = FakeInputValidator()
-    use_case = SubmitGenerationJobUseCase(
-        collection_repo,
-        job_repo,
-        provider,
-        capability_registry,
-        validator,
-        webhook_url='https://backend.test/api/v1/provider/fal/webhook',
-    )
-
-    request = _generation_request(prompt='a cat')
-    result = use_case.execute(request)
-
-    assert len(validator.calls) == 1
-    assert validator.calls[0]['inputs'] == request.inputs
-    assert collection_repo.created_payload is not None
-    assert collection_repo.created_payload.status == 'GENERATING'
-    assert collection_repo.created_payload.metadata['format'] == 'png'
-    assert collection_repo.assigned == [
-        (collection_repo.created_item_id, job_repo.created_jobs[0].id),
-    ]
+    assert submission.run.status == 'IN_PROGRESS'
+    assert len(submission.outputs) == 2
+    assert len(collection_repo.created_payloads) == 2
+    assert run_repo.created_run is not None
+    assert run_repo.created_run.requested_output_count == 2
     assert len(provider.submit_calls) == 1
-    assert provider.submit_calls[0]['endpoint_id'] == 'fal-ai/nano-banana'
-    assert result.status == 'IN_PROGRESS'
-    assert result.provider_request_id == 'req-123'
+    assert provider.submit_calls[0]['inputs'] == {
+        'prompt': 'a cinematic portrait',
+        'num_images': 2,
+    }
 
 
-def test_execute_uses_video_placeholder_metadata_format_mp4() -> None:
-    collection_repo = FakeCollectionItemRepository()
-    use_case = SubmitGenerationJobUseCase(
-        collection_repo,
-        FakeGenerationJobRepository(),
-        FakeGenerationProvider(),
-        FakeCapabilityRegistry(
-            has_model=True, resolved_operation=_resolved_operation(media_type='video')
-        ),
-        FakeInputValidator(),
-        webhook_url='https://backend.test/api/v1/provider/fal/webhook',
+def test_submit_generation_run_rejects_output_count_outside_bounds() -> None:
+    use_case, _, _, _ = _build_use_case(supports_batch=True)
+    request = GenerationRunRequest(
+        project_id=uuid4(),
+        collection_id=uuid4(),
+        model_key='nano_banana',
+        operation_key='text_to_image',
+        inputs={'prompt': 'a cinematic portrait'},
+        output_count=0,
     )
 
-    use_case.execute(_generation_request(prompt='a video prompt'))
-
-    assert collection_repo.created_payload is not None
-    assert collection_repo.created_payload.media_type == 'video'
-    assert collection_repo.created_payload.metadata['format'] == 'mp4'
+    with pytest.raises(InvalidOutputCountError):
+        use_case.execute(request)
 
 
-def test_execute_uses_default_item_name_when_prompt_missing_or_blank() -> None:
-    collection_repo = FakeCollectionItemRepository()
-    use_case = SubmitGenerationJobUseCase(
-        collection_repo,
-        FakeGenerationJobRepository(),
-        FakeGenerationProvider(),
-        FakeCapabilityRegistry(has_model=True, resolved_operation=_resolved_operation()),
-        FakeInputValidator(),
-        webhook_url='https://backend.test/api/v1/provider/fal/webhook',
+def test_submit_generation_run_rejects_non_batch_operation_when_multiple_outputs() -> None:
+    use_case, _, _, _ = _build_use_case(supports_batch=False)
+    request = GenerationRunRequest(
+        project_id=uuid4(),
+        collection_id=uuid4(),
+        model_key='nano_banana',
+        operation_key='text_to_image',
+        inputs={'prompt': 'a cinematic portrait'},
+        output_count=2,
     )
 
-    use_case.execute(_generation_request(prompt=''))
-
-    assert collection_repo.created_payload is not None
-    assert collection_repo.created_payload.name == 'Generated Asset'
-
-
-def test_execute_truncates_item_name_to_80_characters() -> None:
-    collection_repo = FakeCollectionItemRepository()
-    use_case = SubmitGenerationJobUseCase(
-        collection_repo,
-        FakeGenerationJobRepository(),
-        FakeGenerationProvider(),
-        FakeCapabilityRegistry(has_model=True, resolved_operation=_resolved_operation()),
-        FakeInputValidator(),
-        webhook_url='https://backend.test/api/v1/provider/fal/webhook',
-    )
-
-    long_prompt = 'x' * 120
-    use_case.execute(_generation_request(prompt=long_prompt))
-
-    assert collection_repo.created_payload is not None
-    assert collection_repo.created_payload.name == 'x' * 80
-
-
-def test_execute_raises_when_assign_job_id_returns_none() -> None:
-    collection_repo = FakeCollectionItemRepository(assign_returns_none=True)
-    use_case = SubmitGenerationJobUseCase(
-        collection_repo,
-        FakeGenerationJobRepository(),
-        FakeGenerationProvider(),
-        FakeCapabilityRegistry(has_model=True, resolved_operation=_resolved_operation()),
-        FakeInputValidator(),
-        webhook_url='https://backend.test/api/v1/provider/fal/webhook',
-    )
-
-    with pytest.raises(LookupError, match='not found after generation job creation'):
-        use_case.execute(_generation_request(prompt='a cat'))
-
-
-def test_execute_marks_job_and_item_failed_when_provider_submit_raises() -> None:
-    collection_repo = FakeCollectionItemRepository()
-    job_repo = FakeGenerationJobRepository()
-    provider = FakeGenerationProvider(error=RuntimeError('provider down'))
-    use_case = SubmitGenerationJobUseCase(
-        collection_repo,
-        job_repo,
-        provider,
-        FakeCapabilityRegistry(has_model=True, resolved_operation=_resolved_operation()),
-        FakeInputValidator(),
-        webhook_url='https://backend.test/api/v1/provider/fal/webhook',
-    )
-
-    with pytest.raises(RuntimeError, match='provider down'):
-        use_case.execute(_generation_request(prompt='a cat'))
-
-    assert len(job_repo.failed_calls) == 1
-    assert job_repo.failed_calls[0]['error_code'] == 'provider_submit_failed'
-    assert collection_repo.failed_calls == [
-        (collection_repo.created_item_id, 'Failed to submit generation request'),
-    ]
+    with pytest.raises(UnsupportedBatchOutputCountError):
+        use_case.execute(request)

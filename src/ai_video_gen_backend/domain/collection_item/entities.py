@@ -60,7 +60,8 @@ class CollectionItem:
     generation_error_message: str | None
     created_at: datetime
     updated_at: datetime
-    job_id: UUID | None = None
+    run_id: UUID | None = None
+    generation_run_output_id: UUID | None = None
     storage_provider: str | None = None
     storage_bucket: str | None = None
     storage_key: str | None = None
@@ -80,7 +81,8 @@ class CollectionItemCreationPayload:
     generation_source: str = 'upload'
     status: CollectionItemStatus = 'READY'
     generation_error_message: str | None = None
-    job_id: UUID | None = None
+    run_id: UUID | None = None
+    generation_run_output_id: UUID | None = None
     storage_provider: str | None = None
     storage_bucket: str | None = None
     storage_key: str | None = None

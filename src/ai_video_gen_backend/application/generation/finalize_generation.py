@@ -11,7 +11,7 @@ from ai_video_gen_backend.domain.collection_item import (
     VideoThumbnailGeneratorPort,
 )
 from ai_video_gen_backend.domain.generation import (
-    GenerationJobRepositoryPort,
+    GenerationRunRepositoryPort,
     MediaDownloaderPort,
     MediaDownloadError,
 )
@@ -27,28 +27,33 @@ class GenerationFinalizer:
         self,
         *,
         collection_item_repository: CollectionItemRepositoryPort,
-        generation_job_repository: GenerationJobRepositoryPort,
+        generation_run_repository: GenerationRunRepositoryPort,
         object_storage: ObjectStoragePort,
         media_downloader: MediaDownloaderPort,
         video_thumbnail_generator: VideoThumbnailGeneratorPort,
         max_download_bytes: int,
     ) -> None:
         self._collection_item_repository = collection_item_repository
-        self._generation_job_repository = generation_job_repository
+        self._generation_run_repository = generation_run_repository
         self._object_storage = object_storage
         self._media_downloader = media_downloader
         self._video_thumbnail_generator = video_thumbnail_generator
         self._max_download_bytes = max_download_bytes
 
-    def finalize_success(
+    def finalize_output_success(
         self,
         *,
-        job_id: UUID,
-        item_id: UUID,
+        output_id: UUID,
         output: dict[str, object],
-        provider_response_json: dict[str, object],
-        outputs_json: list[dict[str, object]],
     ) -> None:
+        collection_item = self._collection_item_repository.get_item_by_generation_run_output_id(
+            output_id
+        )
+        if collection_item is None:
+            raise GenerationFinalizationError(
+                f'Collection item linked to output {output_id} was not found while finalizing'
+            )
+
         provider_url = output.get('provider_url')
         if not isinstance(provider_url, str) or len(provider_url.strip()) == 0:
             raise GenerationFinalizationError(
@@ -62,7 +67,7 @@ class GenerationFinalizer:
         except MediaDownloadError as exc:
             raise GenerationFinalizationError(str(exc)) from exc
 
-        storage_key = self._build_storage_key(item_id=item_id, content_type=content_type)
+        storage_key = self._build_storage_key(item_id=collection_item.id, content_type=content_type)
 
         try:
             stored_object = self._object_storage.upload_object(
@@ -77,7 +82,10 @@ class GenerationFinalizer:
         media_type = self._resolve_media_type(output=output, content_type=content_type)
         thumbnail_url = stored_object.url
         if media_type == 'video':
-            thumbnail_url = self._generate_video_thumbnail(item_id=item_id, video=downloaded)
+            thumbnail_url = self._generate_video_thumbnail(
+                item_id=collection_item.id,
+                video=downloaded,
+            )
 
         metadata: JsonObject = {
             'thumbnailUrl': thumbnail_url,
@@ -88,7 +96,7 @@ class GenerationFinalizer:
         }
 
         updated_item = self._collection_item_repository.mark_generated_item_ready(
-            item_id=item_id,
+            item_id=collection_item.id,
             url=stored_object.url,
             metadata=metadata,
             storage_provider=stored_object.provider,
@@ -100,33 +108,48 @@ class GenerationFinalizer:
         if updated_item is None:
             raise GenerationFinalizationError('Collection item was not found while finalizing')
 
-        self._generation_job_repository.mark_succeeded(
-            job_id,
-            provider_response_json=provider_response_json,
-            outputs_json=outputs_json,
+        self._generation_run_repository.mark_output_ready(
+            output_id=output_id,
+            provider_output_json=output,
+            stored_output_json={
+                'storedUrl': stored_object.url,
+                'storageProvider': stored_object.provider,
+                'storageBucket': stored_object.bucket,
+                'storageKey': stored_object.key,
+                'mimeType': stored_object.mime_type,
+                'sizeBytes': stored_object.size_bytes,
+                'thumbnailUrl': thumbnail_url,
+                'mediaType': media_type,
+            },
         )
 
-    def finalize_failure(
+    def finalize_output_failure(
         self,
         *,
-        job_id: UUID,
-        item_id: UUID,
+        output_id: UUID,
         error_code: str,
         error_message: str,
-        provider_response_json: dict[str, object] | None = None,
+        provider_output_json: dict[str, object] | None = None,
     ) -> None:
+        collection_item = self._collection_item_repository.get_item_by_generation_run_output_id(
+            output_id
+        )
+        if collection_item is None:
+            raise GenerationFinalizationError(
+                f'Collection item linked to output {output_id} was not found while marking failure'
+            )
+
         updated_item = self._collection_item_repository.mark_generated_item_failed(
-            item_id=item_id,
-            error_message=error_message,
+            item_id=collection_item.id, error_message=error_message
         )
         if updated_item is None:
             raise GenerationFinalizationError('Collection item was not found while marking failure')
 
-        self._generation_job_repository.mark_failed(
-            job_id,
+        self._generation_run_repository.mark_output_failed(
+            output_id=output_id,
             error_code=error_code,
             error_message=error_message,
-            provider_response_json=provider_response_json,
+            provider_output_json=provider_output_json,
         )
 
     def _build_storage_key(self, *, item_id: UUID, content_type: str) -> str:

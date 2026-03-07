@@ -1,0 +1,11 @@
+.git
+.gitignore
+.coverage
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd

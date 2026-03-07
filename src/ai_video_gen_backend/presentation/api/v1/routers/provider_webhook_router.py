@@ -16,7 +16,7 @@ from ai_video_gen_backend.domain.collection_item import (
 from ai_video_gen_backend.domain.generation import GenerationProviderPort, MediaDownloaderPort
 from ai_video_gen_backend.infrastructure.repositories import (
     CollectionItemSqlRepository,
-    GenerationJobSqlRepository,
+    GenerationRunSqlRepository,
 )
 from ai_video_gen_backend.presentation.api.dependencies import (
     get_app_settings,
@@ -55,17 +55,17 @@ async def handle_fal_webhook(
 
     payload = {str(k): v for k, v in payload_raw.items()}
 
-    generation_job_repository = GenerationJobSqlRepository(session)
+    generation_run_repository = GenerationRunSqlRepository(session)
     generation_finalizer = GenerationFinalizer(
         collection_item_repository=CollectionItemSqlRepository(session),
-        generation_job_repository=generation_job_repository,
+        generation_run_repository=generation_run_repository,
         object_storage=object_storage,
         media_downloader=media_downloader,
         video_thumbnail_generator=video_thumbnail_generator,
         max_download_bytes=settings.generation_result_max_download_mb * 1024 * 1024,
     )
     use_case = HandleFalWebhookUseCase(
-        generation_job_repository=generation_job_repository,
+        generation_run_repository=generation_run_repository,
         generation_provider=generation_provider,
         generation_finalizer=generation_finalizer,
     )

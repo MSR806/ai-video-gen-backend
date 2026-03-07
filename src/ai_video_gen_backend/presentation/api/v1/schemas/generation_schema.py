@@ -6,53 +6,97 @@ from uuid import UUID
 
 from pydantic import Field
 
-from ai_video_gen_backend.domain.generation import GenerationJob
+from ai_video_gen_backend.domain.collection_item import CollectionItem
+from ai_video_gen_backend.domain.generation import GenerationRun, GenerationRunOutput
 from ai_video_gen_backend.domain.types import JsonValue
 from ai_video_gen_backend.presentation.api.v1.schemas.base import StrictSchema
 
 
-class GenerationJobError(StrictSchema):
+class GenerationRunError(StrictSchema):
     code: str | None = None
     message: str | None = None
 
 
-class GenerationJobResponse(StrictSchema):
-    id: UUID
-    status: Literal['QUEUED', 'IN_PROGRESS', 'SUCCEEDED', 'FAILED', 'CANCELLED']
+class GenerationRunOutputResponse(StrictSchema):
+    id: UUID = Field(alias='outputId')
+    output_index: int = Field(alias='outputIndex')
+    status: Literal['QUEUED', 'READY', 'FAILED']
+    collection_item_id: UUID | None = Field(default=None, alias='collectionItemId')
+    error_code: str | None = Field(default=None, alias='errorCode')
+    error_message: str | None = Field(default=None, alias='errorMessage')
+    provider_output: dict[str, JsonValue] | None = Field(default=None, alias='providerOutput')
+    stored_output: dict[str, JsonValue] | None = Field(default=None, alias='storedOutput')
+
+    @classmethod
+    def from_domain(
+        cls,
+        output: GenerationRunOutput,
+        collection_item_id: UUID | None,
+    ) -> GenerationRunOutputResponse:
+        return cls(
+            id=output.id,
+            output_index=output.output_index,
+            status=output.status,
+            collection_item_id=collection_item_id,
+            error_code=output.error_code,
+            error_message=output.error_message,
+            provider_output=output.provider_output_json,
+            stored_output=output.stored_output_json,
+        )
+
+
+class GenerationRunResponse(StrictSchema):
+    id: UUID = Field(alias='runId')
+    status: Literal['QUEUED', 'IN_PROGRESS', 'SUCCEEDED', 'PARTIAL_FAILED', 'FAILED', 'CANCELLED']
     operation_key: str = Field(alias='operationKey')
     provider: str
     model_key: str = Field(alias='modelKey')
     endpoint_id: str | None = Field(default=None, alias='endpointId')
     project_id: UUID = Field(alias='projectId')
-    collection_id: UUID = Field(alias='collectionId')
-    item_id: UUID | None = Field(default=None, alias='itemId')
-    outputs: list[dict[str, JsonValue]] = Field(default_factory=list)
-    error: GenerationJobError | None = None
+    requested_output_count: int = Field(alias='requestedOutputCount')
+    outputs: list[GenerationRunOutputResponse] = Field(default_factory=list)
+    error: GenerationRunError | None = None
     created_at: datetime = Field(alias='createdAt')
     updated_at: datetime = Field(alias='updatedAt')
     submitted_at: datetime | None = Field(default=None, alias='submittedAt')
     completed_at: datetime | None = Field(default=None, alias='completedAt')
 
     @classmethod
-    def from_domain(cls, job: GenerationJob) -> GenerationJobResponse:
-        error: GenerationJobError | None = None
-        if job.error_code is not None or job.error_message is not None:
-            error = GenerationJobError(code=job.error_code, message=job.error_message)
+    def from_domain(
+        cls,
+        run: GenerationRun,
+        outputs: list[GenerationRunOutput],
+        collection_items: list[CollectionItem],
+    ) -> GenerationRunResponse:
+        error: GenerationRunError | None = None
+        if run.error_code is not None or run.error_message is not None:
+            error = GenerationRunError(code=run.error_code, message=run.error_message)
+
+        collection_item_id_by_output_id = {
+            item.generation_run_output_id: item.id
+            for item in collection_items
+            if item.generation_run_output_id is not None
+        }
 
         return cls(
-            id=job.id,
-            status=job.status,
-            operation_key=job.operation_key,
-            provider=job.provider,
-            model_key=job.model_key,
-            endpoint_id=job.endpoint_id,
-            project_id=job.project_id,
-            collection_id=job.collection_id,
-            item_id=job.collection_item_id,
-            outputs=[dict(output) for output in job.outputs_json],
+            id=run.id,
+            status=run.status,
+            operation_key=run.operation_key,
+            provider=run.provider,
+            model_key=run.model_key,
+            endpoint_id=run.endpoint_id,
+            project_id=run.project_id,
+            requested_output_count=run.requested_output_count,
+            outputs=[
+                GenerationRunOutputResponse.from_domain(
+                    output,
+                    collection_item_id=collection_item_id_by_output_id.get(output.id),
+                )
+                for output in outputs
+            ],
             error=error,
-            created_at=job.created_at,
-            updated_at=job.updated_at,
-            submitted_at=job.submitted_at,
-            completed_at=job.completed_at,
+            created_at=run.created_at,
+            updated_at=run.updated_at,
+            submitted_at=run.submitted_at,
+            completed_at=run.completed_at,
         )
