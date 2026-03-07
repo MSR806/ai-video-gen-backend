@@ -7,7 +7,12 @@ from ai_video_gen_backend.domain.collection_item import (
     CollectionItem,
     CollectionItemRepositoryPort,
     ObjectStoragePort,
+    StorageError,
 )
+
+
+class DeleteStorageFailureError(Exception):
+    """Raised when deleting a stored object fails for a collection item."""
 
 
 class DeleteCollectionItemUseCase:
@@ -24,8 +29,11 @@ class DeleteCollectionItemUseCase:
         if item is None or item.collection_id != collection_id:
             return False
 
-        for key in self._storage_keys(item):
-            self._object_storage.delete_object(key=key)
+        try:
+            for key in self._storage_keys(item):
+                self._object_storage.delete_object(key=key)
+        except StorageError as exc:
+            raise DeleteStorageFailureError from exc
 
         return self._collection_item_repository.delete_item(item_id)
 

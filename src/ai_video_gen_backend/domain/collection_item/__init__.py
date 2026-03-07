@@ -15,6 +15,7 @@ from .entities import (
     MediaType,
     Resolution,
 )
+from .errors import CollectionItemConstraintViolationError
 from .ports import CollectionItemRepositoryPort
 from .storage import ObjectStoragePort, StorageError, StoredObject
 from .thumbnail import VideoThumbnailGenerationError, VideoThumbnailGeneratorPort
@@ -25,6 +26,7 @@ __all__ = [
     'CameraBody',
     'CameraSetup',
     'CollectionItem',
+    'CollectionItemConstraintViolationError',
     'CollectionItemCreationPayload',
     'CollectionItemGenerationParams',
     'CollectionItemRepositoryPort',

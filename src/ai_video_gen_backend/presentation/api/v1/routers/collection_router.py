@@ -6,7 +6,6 @@ from contextlib import suppress
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ai_video_gen_backend.application.collection import (
@@ -18,25 +17,17 @@ from ai_video_gen_backend.application.collection_item import (
     DeleteCollectionItemUseCase,
     GetCollectionItemByIdUseCase,
     GetCollectionItemsUseCase,
-    PayloadTooLargeError,
-    UnsupportedMediaTypeError,
     UploadCollectionItemUseCase,
 )
 from ai_video_gen_backend.application.generation import (
     GenerationInputValidator,
-    InvalidGenerationInputsError,
-    InvalidOutputCountError,
     SubmitGenerationRunUseCase,
-    UnsupportedBatchOutputCountError,
-    UnsupportedModelKeyError,
-    UnsupportedOperationKeyError,
 )
 from ai_video_gen_backend.config.settings import Settings
 from ai_video_gen_backend.domain.collection_item import (
     CollectionItemCreationPayload,
     JsonObject,
     ObjectStoragePort,
-    StorageError,
     VideoThumbnailGeneratorPort,
 )
 from ai_video_gen_backend.domain.generation import (
@@ -44,7 +35,6 @@ from ai_video_gen_backend.domain.generation import (
     GenerationProviderPort,
     GenerationRunRequest,
 )
-from ai_video_gen_backend.infrastructure.providers.fal import CapabilityRegistryLoadError
 from ai_video_gen_backend.infrastructure.repositories import (
     CollectionItemSqlRepository,
     CollectionSqlRepository,
@@ -158,16 +148,7 @@ def create_collection_item(
         metadata=request.metadata,
         generation_source=request.generation_source,
     )
-
-    try:
-        item = use_case.execute(payload)
-    except IntegrityError as exc:
-        raise ApiError(
-            status_code=400,
-            code='constraint_violation',
-            message='Invalid item payload for collection/project relationship',
-            details={'reason': str(exc.__class__.__name__)},
-        ) from exc
+    item = use_case.execute(payload)
 
     return CollectionItemResponse.from_domain(item)
 
@@ -245,31 +226,6 @@ def upload_collection_item(
             description=description,
             metadata=parsed_metadata,
         )
-    except UnsupportedMediaTypeError as exc:
-        raise ApiError(
-            status_code=400,
-            code='unsupported_media_type',
-            message='Only image/* and video/* uploads are allowed',
-        ) from exc
-    except PayloadTooLargeError as exc:
-        raise ApiError(
-            status_code=413,
-            code='payload_too_large',
-            message='Uploaded file exceeds max allowed size',
-        ) from exc
-    except StorageError as exc:
-        raise ApiError(
-            status_code=502,
-            code='storage_upload_failed',
-            message='Failed to upload object to storage',
-        ) from exc
-    except IntegrityError as exc:
-        raise ApiError(
-            status_code=400,
-            code='constraint_violation',
-            message='Invalid item payload for collection/project relationship',
-            details={'reason': str(exc.__class__.__name__)},
-        ) from exc
     finally:
         with suppress(Exception):
             file.file.close()
@@ -289,14 +245,7 @@ def delete_collection_item(
         raise ApiError(status_code=404, code='collection_not_found', message='Collection not found')
 
     use_case = DeleteCollectionItemUseCase(CollectionItemSqlRepository(session), object_storage)
-    try:
-        deleted = use_case.execute(collection_id=collection_id, item_id=item_id)
-    except StorageError as exc:
-        raise ApiError(
-            status_code=502,
-            code='storage_delete_failed',
-            message='Failed to delete object from storage',
-        ) from exc
+    deleted = use_case.execute(collection_id=collection_id, item_id=item_id)
 
     if not deleted:
         raise ApiError(
@@ -342,62 +291,17 @@ def create_generation_run(
         input_validator=input_validator,
         webhook_url=_build_generation_webhook_url(settings),
     )
-    try:
-        submission = use_case.execute(
-            GenerationRunRequest(
-                project_id=request.project_id,
-                collection_id=collection_id,
-                model_key=request.model_key,
-                operation_key=request.operation_key,
-                inputs=request.inputs,
-                output_count=request.output_count,
-                idempotency_key=request.idempotency_key,
-            )
+    submission = use_case.execute(
+        GenerationRunRequest(
+            project_id=request.project_id,
+            collection_id=collection_id,
+            model_key=request.model_key,
+            operation_key=request.operation_key,
+            inputs=request.inputs,
+            output_count=request.output_count,
+            idempotency_key=request.idempotency_key,
         )
-    except UnsupportedModelKeyError as exc:
-        raise ApiError(
-            status_code=400,
-            code='unsupported_model_key',
-            message='Unsupported or disabled model key',
-        ) from exc
-    except UnsupportedOperationKeyError as exc:
-        raise ApiError(
-            status_code=400,
-            code='unsupported_operation_key',
-            message='Unsupported operation key for model',
-        ) from exc
-    except InvalidOutputCountError as exc:
-        raise ApiError(
-            status_code=400,
-            code='invalid_output_count',
-            message='Output count must be between 1 and 4',
-        ) from exc
-    except UnsupportedBatchOutputCountError as exc:
-        raise ApiError(
-            status_code=400,
-            code='unsupported_batch_output_count',
-            message='Selected model operation does not support multi-output generation',
-        ) from exc
-    except InvalidGenerationInputsError as exc:
-        raise ApiError(
-            status_code=400,
-            code='schema_validation_failed',
-            message='Generation inputs validation failed',
-            details={'errors': exc.errors},
-        ) from exc
-    except CapabilityRegistryLoadError as exc:
-        raise ApiError(
-            status_code=500,
-            code='capability_registry_load_failed',
-            message='Failed to load generation model registry',
-        ) from exc
-    except Exception as exc:
-        raise ApiError(
-            status_code=502,
-            code='provider_submit_failed',
-            message='Failed to submit generation request',
-            details={'reason': str(exc.__class__.__name__)},
-        ) from exc
+    )
 
     return GenerationRunSubmitResponse.from_domain(submission)
 

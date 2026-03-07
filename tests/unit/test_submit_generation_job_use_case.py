@@ -6,7 +6,9 @@ from uuid import UUID, uuid4
 import pytest
 
 from ai_video_gen_backend.application.generation.submit_generation_run import (
+    GenerationModelRegistryLoadError,
     InvalidOutputCountError,
+    ProviderSubmissionFailedError,
     SubmitGenerationRunUseCase,
     UnsupportedBatchOutputCountError,
 )
@@ -19,6 +21,7 @@ from ai_video_gen_backend.domain.collection_item import (
     JsonValue,
 )
 from ai_video_gen_backend.domain.generation import (
+    CapabilityRegistryError,
     GenerationCapabilities,
     GenerationRun,
     GenerationRunOutput,
@@ -119,6 +122,8 @@ class FakeGenerationRunRepository:
         self.existing = existing
         self.created_run: GenerationRun | None = None
         self.created_outputs: list[GenerationRunOutput] = []
+        self.failed_run_errors: list[tuple[str, str]] = []
+        self.failed_output_errors: list[tuple[UUID, str, str]] = []
 
     def create_run(
         self,
@@ -248,6 +253,7 @@ class FakeGenerationRunRepository:
         provider_response_json: dict[str, object] | None = None,
     ) -> GenerationRun:
         assert self.created_run is not None
+        self.failed_run_errors.append((error_code, error_message))
         now = datetime.now(UTC)
         return GenerationRun(
             id=run_id,
@@ -298,8 +304,23 @@ class FakeGenerationRunRepository:
         error_message: str,
         provider_output_json: dict[str, object] | None = None,
     ) -> GenerationRunOutput:
-        del output_id, error_code, error_message, provider_output_json
-        raise NotImplementedError
+        del provider_output_json
+        self.failed_output_errors.append((output_id, error_code, error_message))
+        for output in self.created_outputs:
+            if output.id == output_id:
+                return GenerationRunOutput(
+                    id=output.id,
+                    run_id=output.run_id,
+                    output_index=output.output_index,
+                    status='FAILED',
+                    provider_output_json=None,
+                    stored_output_json=None,
+                    error_code=error_code,
+                    error_message=error_message,
+                    created_at=output.created_at,
+                    updated_at=output.updated_at,
+                )
+        raise LookupError(output_id)
 
 
 class FakeProvider:
@@ -343,6 +364,18 @@ class FakeProvider:
         return None
 
 
+class FailingProvider(FakeProvider):
+    def submit(
+        self,
+        *,
+        endpoint_id: str,
+        inputs: dict[str, object],
+        webhook_url: str,
+    ) -> ProviderSubmission:
+        del endpoint_id, inputs, webhook_url
+        raise RuntimeError('provider request failed')
+
+
 class FakeCapabilityRegistry:
     def __init__(self, *, supports_batch: bool) -> None:
         self.supports_batch = supports_batch
@@ -377,6 +410,21 @@ class FakeCapabilityRegistry:
                 'additionalProperties': False,
             },
         )
+
+
+class FailingCapabilityRegistry:
+    def list_capabilities(self) -> GenerationCapabilities:
+        raise CapabilityRegistryError('registry unavailable')
+
+    def has_model(self, *, model_key: str) -> bool:
+        del model_key
+        raise CapabilityRegistryError('registry unavailable')
+
+    def resolve_operation(
+        self, *, model_key: str, operation_key: str
+    ) -> ResolvedGenerationOperation | None:
+        del model_key, operation_key
+        raise CapabilityRegistryError('registry unavailable')
 
 
 def _build_use_case(
@@ -456,3 +504,59 @@ def test_submit_generation_run_rejects_non_batch_operation_when_multiple_outputs
 
     with pytest.raises(UnsupportedBatchOutputCountError):
         use_case.execute(request)
+
+
+def test_submit_generation_run_wraps_capability_registry_failures() -> None:
+    collection_repo = FakeCollectionItemRepository()
+    run_repo = FakeGenerationRunRepository()
+    provider = FakeProvider()
+    use_case = SubmitGenerationRunUseCase(
+        collection_item_repository=collection_repo,
+        generation_run_repository=run_repo,
+        generation_provider=provider,
+        capability_registry=FailingCapabilityRegistry(),
+        input_validator=GenerationInputValidator(),
+        webhook_url='https://webhook.test/fal',
+    )
+    request = GenerationRunRequest(
+        project_id=uuid4(),
+        collection_id=uuid4(),
+        model_key='nano_banana',
+        operation_key='text_to_image',
+        inputs={'prompt': 'a cinematic portrait'},
+        output_count=1,
+    )
+
+    with pytest.raises(GenerationModelRegistryLoadError):
+        use_case.execute(request)
+
+
+def test_submit_generation_run_marks_failures_when_provider_submit_fails() -> None:
+    collection_repo = FakeCollectionItemRepository()
+    run_repo = FakeGenerationRunRepository()
+    use_case = SubmitGenerationRunUseCase(
+        collection_item_repository=collection_repo,
+        generation_run_repository=run_repo,
+        generation_provider=FailingProvider(),
+        capability_registry=FakeCapabilityRegistry(supports_batch=True),
+        input_validator=GenerationInputValidator(),
+        webhook_url='https://webhook.test/fal',
+    )
+    request = GenerationRunRequest(
+        project_id=uuid4(),
+        collection_id=uuid4(),
+        model_key='nano_banana',
+        operation_key='text_to_image',
+        inputs={'prompt': 'a cinematic portrait'},
+        output_count=2,
+    )
+
+    with pytest.raises(ProviderSubmissionFailedError, match='Failed to submit generation request'):
+        use_case.execute(request)
+
+    assert run_repo.failed_run_errors
+    assert run_repo.failed_run_errors[-1][0] == 'provider_submit_failed'
+    assert len(run_repo.failed_output_errors) == 2
+    assert all(
+        error_code == 'provider_submit_failed' for _, error_code, _ in run_repo.failed_output_errors
+    )

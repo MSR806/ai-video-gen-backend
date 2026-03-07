@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from ai_video_gen_backend.application.generation import (
-    GenerationFinalizationError,
     GenerationFinalizer,
     HandleFalWebhookUseCase,
 )
@@ -69,14 +68,6 @@ async def handle_fal_webhook(
         generation_provider=generation_provider,
         generation_finalizer=generation_finalizer,
     )
-
-    try:
-        handled = use_case.execute(payload)
-    except GenerationFinalizationError as exc:
-        raise ApiError(
-            status_code=500,
-            code='generation_finalize_failed',
-            message=str(exc),
-        ) from exc
+    handled = use_case.execute(payload)
 
     return {'handled': handled}

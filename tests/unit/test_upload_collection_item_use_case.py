@@ -11,6 +11,7 @@ from ai_video_gen_backend.application.collection_item import (
     PayloadTooLargeError,
     UnsupportedMediaTypeError,
     UploadCollectionItemUseCase,
+    UploadStorageFailureError,
 )
 from ai_video_gen_backend.domain.collection_item import (
     CollectionItem,
@@ -18,6 +19,7 @@ from ai_video_gen_backend.domain.collection_item import (
     CollectionItemGenerationParams,
     GeneratedCollectionItem,
     JsonValue,
+    StorageError,
     StoredObject,
     VideoThumbnailGenerationError,
 )
@@ -112,9 +114,10 @@ class FakeCollectionItemRepository:
 
 
 class FakeObjectStorage:
-    def __init__(self) -> None:
+    def __init__(self, *, fail_on_upload: bool = False) -> None:
         self.uploaded: list[StoredObject] = []
         self.deleted_keys: list[str] = []
+        self.fail_on_upload = fail_on_upload
 
     def upload_object(
         self,
@@ -124,6 +127,9 @@ class FakeObjectStorage:
         body: BinaryIO,
         size_bytes: int,
     ) -> StoredObject:
+        if self.fail_on_upload:
+            raise StorageError('upload failed')
+
         body.seek(0)
         stored = StoredObject(
             provider='s3',
@@ -311,6 +317,36 @@ def test_upload_collection_item_rejects_payload_larger_than_limit() -> None:
             description='',
             metadata=None,
         )
+
+
+def test_upload_collection_item_raises_when_primary_storage_upload_fails() -> None:
+    repository = FakeCollectionItemRepository()
+    object_storage = FakeObjectStorage(fail_on_upload=True)
+    thumbnail_generator = FakeVideoThumbnailGenerator()
+    use_case = UploadCollectionItemUseCase(
+        repository,
+        object_storage,
+        thumbnail_generator,
+        max_upload_size_bytes=1024,
+        allowed_mime_prefixes=('image/', 'video/'),
+    )
+
+    with pytest.raises(UploadStorageFailureError):
+        use_case.execute(
+            project_id=uuid4(),
+            collection_id=uuid4(),
+            filename='image.jpg',
+            content_type='image/jpeg',
+            file_stream=BytesIO(b'image-bytes'),
+            size_bytes=11,
+            name='Image',
+            description='',
+            metadata=None,
+        )
+
+    assert object_storage.uploaded == []
+    assert object_storage.deleted_keys == []
+    assert repository.created_payload is None
 
 
 def test_upload_collection_item_deletes_object_when_db_create_fails() -> None:

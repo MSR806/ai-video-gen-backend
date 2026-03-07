@@ -9,6 +9,7 @@ from jsonschema import Draft202012Validator
 from jsonschema.exceptions import ValidationError
 
 from ai_video_gen_backend.domain.generation import (
+    CapabilityRegistryError,
     GenerationCapabilities,
     GenerationCapabilityRegistryPort,
     ModelCapability,
@@ -19,10 +20,6 @@ from ai_video_gen_backend.domain.types import JsonObject
 from ai_video_gen_backend.infrastructure.providers.fal.schema_normalizer import (
     normalize_operation_schema,
 )
-
-
-class CapabilityRegistryLoadError(Exception):
-    """Raised when model registry cannot be loaded or validated."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,10 +73,10 @@ class ModelRegistryLoader:
             schema_payload = json.loads(self._schema_path.read_text(encoding='utf-8'))
             registry_payload = json.loads(self._registry_path.read_text(encoding='utf-8'))
         except (OSError, json.JSONDecodeError) as exc:
-            raise CapabilityRegistryLoadError('Failed to read generation model registry') from exc
+            raise CapabilityRegistryError('Failed to read generation model registry') from exc
 
         if not isinstance(schema_payload, dict) or not isinstance(registry_payload, dict):
-            raise CapabilityRegistryLoadError('Invalid generation model registry payload')
+            raise CapabilityRegistryError('Invalid generation model registry payload')
 
         validator = Draft202012Validator(schema_payload)
         errors = sorted(validator.iter_errors(registry_payload), key=_error_sort_key)
@@ -87,18 +84,18 @@ class ModelRegistryLoader:
             first = errors[0]
             path = '/'.join(str(part) for part in first.path)
             location = path if len(path) > 0 else '<root>'
-            raise CapabilityRegistryLoadError(
+            raise CapabilityRegistryError(
                 f'Generation model registry validation failed at {location}: {first.message}'
             )
 
         models_raw = registry_payload.get('models')
         if not isinstance(models_raw, list):
-            raise CapabilityRegistryLoadError('Generation model registry missing models list')
+            raise CapabilityRegistryError('Generation model registry missing models list')
 
         models: list[_RegistryModel] = []
         for model_raw in models_raw:
             if not isinstance(model_raw, dict):
-                raise CapabilityRegistryLoadError('Generation model entry must be an object')
+                raise CapabilityRegistryError('Generation model entry must be an object')
             models.append(_parse_model(model_raw))
 
         return models
@@ -174,12 +171,12 @@ def _error_sort_key(error: ValidationError) -> tuple[str, str]:
 def _parse_model(model_raw: dict[str, object]) -> _RegistryModel:
     operations_raw = model_raw.get('operations')
     if not isinstance(operations_raw, list) or len(operations_raw) == 0:
-        raise CapabilityRegistryLoadError('Generation model operations must be a non-empty list')
+        raise CapabilityRegistryError('Generation model operations must be a non-empty list')
 
     operations: list[_RegistryOperation] = []
     for operation_raw in operations_raw:
         if not isinstance(operation_raw, dict):
-            raise CapabilityRegistryLoadError('Generation operation entry must be an object')
+            raise CapabilityRegistryError('Generation operation entry must be an object')
         operations.append(_parse_operation(operation_raw))
 
     model_key = model_raw.get('model_key')
@@ -189,21 +186,19 @@ def _parse_model(model_raw: dict[str, object]) -> _RegistryModel:
     enabled = model_raw.get('enabled')
 
     if not isinstance(model_key, str) or len(model_key.strip()) == 0:
-        raise CapabilityRegistryLoadError('Generation model model_key must be a non-empty string')
+        raise CapabilityRegistryError('Generation model model_key must be a non-empty string')
     if not isinstance(display_name, str) or len(display_name.strip()) == 0:
-        raise CapabilityRegistryLoadError(
-            'Generation model display_name must be a non-empty string'
-        )
+        raise CapabilityRegistryError('Generation model display_name must be a non-empty string')
     if not isinstance(provider, str) or len(provider.strip()) == 0:
-        raise CapabilityRegistryLoadError('Generation model provider must be a non-empty string')
+        raise CapabilityRegistryError('Generation model provider must be a non-empty string')
     if media_type == 'image':
         media_type_value = 'image'
     elif media_type == 'video':
         media_type_value = 'video'
     else:
-        raise CapabilityRegistryLoadError('Generation model media_type must be image or video')
+        raise CapabilityRegistryError('Generation model media_type must be image or video')
     if not isinstance(enabled, bool):
-        raise CapabilityRegistryLoadError('Generation model enabled must be boolean')
+        raise CapabilityRegistryError('Generation model enabled must be boolean')
 
     return _RegistryModel(
         model_key=model_key,
@@ -221,15 +216,13 @@ def _parse_operation(operation_raw: dict[str, object]) -> _RegistryOperation:
     input_schema_raw = operation_raw.get('input_schema')
 
     if not isinstance(operation_key, str) or len(operation_key.strip()) == 0:
-        raise CapabilityRegistryLoadError(
+        raise CapabilityRegistryError(
             'Generation operation operation_key must be a non-empty string'
         )
     if not isinstance(endpoint_id, str) or len(endpoint_id.strip()) == 0:
-        raise CapabilityRegistryLoadError(
-            'Generation operation endpoint_id must be a non-empty string'
-        )
+        raise CapabilityRegistryError('Generation operation endpoint_id must be a non-empty string')
     if not isinstance(input_schema_raw, dict):
-        raise CapabilityRegistryLoadError('Generation operation input_schema must be an object')
+        raise CapabilityRegistryError('Generation operation input_schema must be an object')
 
     input_schema: JsonObject = {}
     for key, value in input_schema_raw.items():

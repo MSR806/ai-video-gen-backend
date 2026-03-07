@@ -13,13 +13,17 @@ from ai_video_gen_backend.domain.collection_item import (
     VideoThumbnailGenerationError,
 )
 from ai_video_gen_backend.domain.generation import (
+    CapabilityRegistryError,
     GeneratedOutput,
+    GenerationCapabilities,
     ProviderResult,
     ProviderStatus,
     ProviderSubmission,
     ProviderWebhookEvent,
+    ResolvedGenerationOperation,
 )
 from ai_video_gen_backend.presentation.api.dependencies import (
+    get_generation_capability_registry,
     get_generation_provider,
     get_media_downloader,
     get_object_storage,
@@ -149,6 +153,33 @@ class FakeGenerationProvider:
         )
 
 
+class FailingSubmitGenerationProvider(FakeGenerationProvider):
+    def submit(
+        self,
+        *,
+        endpoint_id: str,
+        inputs: dict[str, object],
+        webhook_url: str,
+    ) -> ProviderSubmission:
+        del endpoint_id, inputs, webhook_url
+        raise RuntimeError('provider submit failed')
+
+
+class FailingCapabilityRegistry:
+    def list_capabilities(self) -> GenerationCapabilities:
+        raise CapabilityRegistryError('registry unavailable')
+
+    def has_model(self, *, model_key: str) -> bool:
+        del model_key
+        raise CapabilityRegistryError('registry unavailable')
+
+    def resolve_operation(
+        self, *, model_key: str, operation_key: str
+    ) -> ResolvedGenerationOperation | None:
+        del model_key, operation_key
+        raise CapabilityRegistryError('registry unavailable')
+
+
 def _override_upload_dependencies(
     client: TestClient,
     storage: FakeObjectStorage,
@@ -174,6 +205,15 @@ def _override_generation_dependency(
         app.dependency_overrides[get_object_storage] = lambda: storage
     if media_downloader is not None:
         app.dependency_overrides[get_media_downloader] = lambda: media_downloader
+    return app
+
+
+def _override_generation_capability_registry(
+    client: TestClient,
+    capability_registry: FailingCapabilityRegistry,
+) -> FastAPI:
+    app = cast(FastAPI, client.app)
+    app.dependency_overrides[get_generation_capability_registry] = lambda: capability_registry
     return app
 
 
@@ -483,6 +523,21 @@ def test_get_generation_capabilities_returns_grouped_models(client: TestClient) 
     assert payload['image'][0]['operations'][0]['operationKey']
 
 
+def test_get_generation_capabilities_registry_failure_returns_500(
+    client: TestClient,
+) -> None:
+    app = _override_generation_capability_registry(client, FailingCapabilityRegistry())
+
+    try:
+        response = client.get('/api/v1/generation/capabilities')
+    finally:
+        app.dependency_overrides.pop(get_generation_capability_registry, None)
+
+    assert response.status_code == 500
+    assert response.json()['error']['code'] == 'capability_registry_load_failed'
+    assert response.json()['error']['message'] == 'Failed to load generation capabilities'
+
+
 def test_create_generation_run_returns_async_run(client: TestClient, db_session: Session) -> None:
     ids = seed_baseline_data(db_session)
     fake_provider = FakeGenerationProvider()
@@ -705,6 +760,64 @@ def test_get_generation_run_returns_outputs(client: TestClient, db_session: Sess
     assert payload['requestedOutputCount'] == 2
     assert len(payload['outputs']) == 2
     assert all(output['collectionItemId'] is not None for output in payload['outputs'])
+
+
+def test_create_generation_run_registry_failure_returns_500(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+    fake_provider = FakeGenerationProvider()
+    app = _override_generation_dependency(client, fake_provider)
+    app = _override_generation_capability_registry(client, FailingCapabilityRegistry())
+
+    try:
+        response = client.post(
+            f'/api/v1/collections/{ids["collection_id"]}/generation-runs',
+            json={
+                'projectId': str(ids['project_id']),
+                'modelKey': 'nano_banana',
+                'operationKey': 'text_to_image',
+                'inputs': {'prompt': 'cinematic wide shot'},
+                'outputCount': 1,
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_generation_provider, None)
+        app.dependency_overrides.pop(get_generation_capability_registry, None)
+
+    assert response.status_code == 500
+    assert response.json()['error']['code'] == 'capability_registry_load_failed'
+    assert response.json()['error']['message'] == 'Failed to load generation model registry'
+
+
+def test_create_generation_run_provider_submit_failure_returns_502(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+    failing_provider = FailingSubmitGenerationProvider()
+    app = _override_generation_dependency(client, failing_provider)
+
+    try:
+        response = client.post(
+            f'/api/v1/collections/{ids["collection_id"]}/generation-runs',
+            json={
+                'projectId': str(ids['project_id']),
+                'modelKey': 'nano_banana',
+                'operationKey': 'text_to_image',
+                'inputs': {'prompt': 'cinematic wide shot'},
+                'outputCount': 1,
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_generation_provider, None)
+
+    assert response.status_code == 502
+    payload = response.json()
+    assert payload['error']['code'] == 'provider_submit_failed'
+    assert payload['error']['message'] == 'Failed to submit generation request'
+    assert payload['error']['details'] == {'reason': 'RuntimeError'}
 
 
 def test_generation_webhook_invalid_token_returns_401(

@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+import pytest
 from sqlalchemy.orm import Session
 
-from ai_video_gen_backend.domain.collection_item import CollectionItemCreationPayload
+from ai_video_gen_backend.domain.collection_item import (
+    CollectionItemConstraintViolationError,
+    CollectionItemCreationPayload,
+)
 from ai_video_gen_backend.infrastructure.db.models import CollectionModel, ProjectModel
 from ai_video_gen_backend.infrastructure.repositories import CollectionItemSqlRepository
 
@@ -104,3 +108,51 @@ def test_collection_item_repository_delete_item_removes_record(db_session: Sessi
     assert deleted is True
     assert missing is None
     assert repository.delete_item(uuid4()) is False
+
+
+def test_collection_item_repository_raises_semantic_constraint_error(
+    db_session: Session,
+) -> None:
+    project_a = uuid4()
+    project_b = uuid4()
+    collection_id = uuid4()
+
+    db_session.add_all(
+        [
+            ProjectModel(
+                id=project_a,
+                name='Project A',
+                description='Project A',
+                status='draft',
+            ),
+            ProjectModel(
+                id=project_b,
+                name='Project B',
+                description='Project B',
+                status='draft',
+            ),
+            CollectionModel(
+                id=collection_id,
+                project_id=project_a,
+                name='Collection A',
+                tag='ref',
+                description='Collection for mismatch test',
+            ),
+        ]
+    )
+    db_session.commit()
+
+    repository = CollectionItemSqlRepository(db_session)
+    payload = CollectionItemCreationPayload(
+        project_id=project_b,
+        collection_id=collection_id,
+        media_type='image',
+        name='Invalid Item',
+        description='Should violate project/collection consistency',
+        url='http://localhost:9000/ai-video-gen-media/key.jpg',
+        metadata={'width': 1, 'height': 1, 'format': 'jpg', 'thumbnailUrl': ''},
+        generation_source='upload',
+    )
+
+    with pytest.raises(CollectionItemConstraintViolationError):
+        repository.create_item(payload)

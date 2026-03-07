@@ -32,6 +32,10 @@ class PayloadTooLargeError(Exception):
     """Raised when uploaded file exceeds configured size limit."""
 
 
+class UploadStorageFailureError(Exception):
+    """Raised when the primary upload object cannot be persisted."""
+
+
 class UploadCollectionItemUseCase:
     def __init__(
         self,
@@ -75,12 +79,15 @@ class UploadCollectionItemUseCase:
             filename=safe_filename,
         )
 
-        stored_object = self._object_storage.upload_object(
-            key=object_key,
-            content_type=content_type,
-            body=file_stream,
-            size_bytes=size_bytes,
-        )
+        try:
+            stored_object = self._object_storage.upload_object(
+                key=object_key,
+                content_type=content_type,
+                body=file_stream,
+                size_bytes=size_bytes,
+            )
+        except StorageError as exc:
+            raise UploadStorageFailureError from exc
         uploaded_object_keys = [stored_object.key]
 
         thumbnail_url = self._resolve_thumbnail_url(

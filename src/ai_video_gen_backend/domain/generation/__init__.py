@@ -20,6 +20,7 @@ from .entities import (
     ProviderWebhookEvent,
     SubmittedRunOutput,
 )
+from .errors import CapabilityRegistryError
 from .ports import (
     GenerationCapabilityRegistryPort,
     GenerationProviderPort,
@@ -27,6 +28,7 @@ from .ports import (
 )
 
 __all__ = [
+    'CapabilityRegistryError',
     'GeneratedOutput',
     'GenerationCapabilities',
     'GenerationCapabilityRegistryPort',

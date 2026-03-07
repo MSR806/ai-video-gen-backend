@@ -6,7 +6,10 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from ai_video_gen_backend.application.collection_item import DeleteCollectionItemUseCase
+from ai_video_gen_backend.application.collection_item import (
+    DeleteCollectionItemUseCase,
+    DeleteStorageFailureError,
+)
 from ai_video_gen_backend.domain.collection_item import (
     CollectionItem,
     CollectionItemCreationPayload,
@@ -217,7 +220,7 @@ def test_delete_collection_item_raises_when_storage_delete_fails() -> None:
     object_storage = FakeObjectStorage(fail_on_keys={object_key})
     use_case = DeleteCollectionItemUseCase(repository, object_storage)
 
-    with pytest.raises(StorageError):
+    with pytest.raises(DeleteStorageFailureError):
         use_case.execute(collection_id=collection_id, item_id=item.id)
 
     assert repository.deleted_ids == []

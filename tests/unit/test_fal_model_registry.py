@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from ai_video_gen_backend.domain.generation import CapabilityRegistryError
 from ai_video_gen_backend.infrastructure.providers.fal.model_registry_loader import (
-    CapabilityRegistryLoadError,
     FalGenerationModelRegistry,
     ModelRegistryLoader,
 )
@@ -93,5 +93,5 @@ def test_registry_loader_raises_for_invalid_payload(tmp_path: Path) -> None:
         ttl_seconds=300, registry_path=registry_path, schema_path=schema_path
     )
 
-    with pytest.raises(CapabilityRegistryLoadError):
+    with pytest.raises(CapabilityRegistryError):
         loader.load()

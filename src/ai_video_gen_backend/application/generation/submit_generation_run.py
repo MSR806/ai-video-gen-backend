@@ -10,6 +10,7 @@ from ai_video_gen_backend.domain.collection_item import (
     CollectionItemRepositoryPort,
 )
 from ai_video_gen_backend.domain.generation import (
+    CapabilityRegistryError,
     GenerationCapabilityRegistryPort,
     GenerationProviderPort,
     GenerationRunRepositoryPort,
@@ -34,6 +35,18 @@ class UnsupportedBatchOutputCountError(Exception):
 
 class InvalidOutputCountError(Exception):
     """Raised when requested output count is outside allowed bounds."""
+
+
+class GenerationModelRegistryLoadError(Exception):
+    """Raised when generation model registry cannot be loaded during run submission."""
+
+
+class ProviderSubmissionFailedError(Exception):
+    """Raised when provider submit call fails after placeholders are created."""
+
+    def __init__(self, *, reason: str) -> None:
+        self.reason = reason
+        super().__init__('Failed to submit generation request')
 
 
 class SubmitGenerationRunUseCase:
@@ -92,13 +105,18 @@ class SubmitGenerationRunUseCase:
                     ],
                 )
 
-        if not self._capability_registry.has_model(model_key=request.model_key):
+        try:
+            has_model = self._capability_registry.has_model(model_key=request.model_key)
+            resolved_operation = self._capability_registry.resolve_operation(
+                model_key=request.model_key,
+                operation_key=request.operation_key,
+            )
+        except CapabilityRegistryError as exc:
+            raise GenerationModelRegistryLoadError from exc
+
+        if not has_model:
             raise UnsupportedModelKeyError
 
-        resolved_operation = self._capability_registry.resolve_operation(
-            model_key=request.model_key,
-            operation_key=request.operation_key,
-        )
         if resolved_operation is None:
             raise UnsupportedOperationKeyError
 
@@ -189,7 +207,7 @@ class SubmitGenerationRunUseCase:
                     error_code='provider_submit_failed',
                     error_message='Failed to submit generation request',
                 )
-            raise
+            raise ProviderSubmissionFailedError(reason=exc.__class__.__name__) from exc
 
     def _submitted_item_id(
         self, *, output_id: UUID, submitted_outputs: list[SubmittedRunOutput]

@@ -4,10 +4,12 @@ from typing import cast
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ai_video_gen_backend.domain.collection_item import (
     CollectionItem,
+    CollectionItemConstraintViolationError,
     CollectionItemCreationPayload,
     CollectionItemStatus,
     JsonValue,
@@ -72,7 +74,11 @@ class CollectionItemSqlRepository:
             size_bytes=payload.size_bytes,
         )
         self._session.add(model)
-        self._session.commit()
+        try:
+            self._session.commit()
+        except IntegrityError as exc:
+            self._session.rollback()
+            raise CollectionItemConstraintViolationError from exc
         self._session.refresh(model)
         return self._to_domain(model)
 
