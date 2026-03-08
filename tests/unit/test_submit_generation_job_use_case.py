@@ -402,6 +402,8 @@ class FakeCapabilityRegistry:
             provider='fal',
             media_type='image',
             operation_key='text_to_image',
+            operation_type='text_to_image',
+            operation_name='Text to Image',
             endpoint_id='fal-ai/nano-banana',
             input_schema={
                 'type': 'object',

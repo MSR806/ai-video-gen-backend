@@ -1,0 +1,137 @@
+{
+  "sort_order": 30,
+  "model_key": "kling_video_2_6_pro",
+  "display_name": "Kling Video 2.6 Pro",
+  "provider": "fal",
+  "media_type": "video",
+  "enabled": true,
+  "operations": [
+    {
+      "operation_key": "text_to_video",
+      "operation_type": "text_to_video",
+      "operation_name": "Text to Video",
+      "endpoint_id": "fal-ai/kling-video/v2.6/pro/text-to-video",
+      "input_schema": {
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "Text prompt used to generate the video."
+          },
+          "duration": {
+            "type": "string",
+            "enum": [
+              "5",
+              "10"
+            ],
+            "default": "5",
+            "description": "The duration of the generated video in seconds."
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "default": "16:9",
+            "description": "The aspect ratio of the generated video frame."
+          },
+          "negative_prompt": {
+            "x_ui_group": "advanced",
+            "type": "string",
+            "default": "blur, distort, and low quality",
+            "description": "Negative prompt used to steer the video generation away from unwanted traits."
+          },
+          "cfg_scale": {
+            "x_ui_group": "advanced",
+            "type": "number",
+            "default": 0.5,
+            "description": "Classifier-free guidance scale controlling how closely the model follows the prompt."
+          },
+          "generate_audio": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether to generate native audio for the video."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operation_key": "image_to_video",
+      "operation_type": "image_to_video",
+      "operation_name": "Image to Video",
+      "endpoint_id": "fal-ai/kling-video/v2.6/pro/image-to-video",
+      "input_schema": {
+        "type": "object",
+        "x_ui_media_groups": [
+          {
+            "group_key": "frames",
+            "layout": "sequence",
+            "placement": "top"
+          }
+        ],
+        "required": [
+          "prompt",
+          "start_image_url"
+        ],
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "Text prompt used to generate the video."
+          },
+          "start_image_url": {
+            "x_ui_media_group": "frames",
+            "x_ui_media_order": 1,
+            "x_ui_media_name": "Start",
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the image to be used for the start of the video."
+          },
+          "duration": {
+            "type": "string",
+            "enum": [
+              "5",
+              "10"
+            ],
+            "default": "5",
+            "description": "The duration of the generated video in seconds."
+          },
+          "negative_prompt": {
+            "x_ui_group": "advanced",
+            "type": "string",
+            "default": "blur, distort, and low quality",
+            "description": "Negative prompt used to steer the video generation away from unwanted traits."
+          },
+          "generate_audio": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether to generate native audio for the video."
+          },
+          "voice_ids": {
+            "x_ui_group": "advanced",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional voice IDs for video generation."
+          },
+          "end_image_url": {
+            "x_ui_group": "advanced",
+            "x_ui_media_group": "frames",
+            "x_ui_media_order": 2,
+            "x_ui_media_name": "End",
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the image to be used for the end of the video."
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ]
+}

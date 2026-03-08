@@ -521,6 +521,17 @@ def test_get_generation_capabilities_returns_grouped_models(client: TestClient) 
     assert len(payload['image']) >= 1
     assert len(payload['video']) >= 1
     assert payload['image'][0]['operations'][0]['operationKey']
+    assert payload['image'][0]['operations'][0]['operationType']
+    assert payload['image'][0]['operations'][0]['operationName']
+    assert 'mediaGroups' in payload['image'][0]['operations'][0]
+    image_to_image = next(
+        operation
+        for operation in payload['image'][0]['operations']
+        if operation['operationKey'] == 'image_to_image'
+    )
+    assert image_to_image['mediaGroups'][0]['groupKey'] == 'references'
+    assert image_to_image['fields'][2]['mediaGroup'] == 'references'
+    assert image_to_image['fields'][2]['mediaName'] == 'Reference Images'
 
 
 def test_get_generation_capabilities_registry_failure_returns_500(

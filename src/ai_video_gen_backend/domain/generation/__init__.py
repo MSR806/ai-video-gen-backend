@@ -1,6 +1,7 @@
 from .capabilities import (
     GenerationCapabilities,
     InputFieldCapability,
+    MediaGroupCapability,
     ModelCapability,
     OperationCapability,
     ResolvedGenerationOperation,
@@ -43,6 +44,7 @@ __all__ = [
     'InputFieldCapability',
     'MediaDownloadError',
     'MediaDownloaderPort',
+    'MediaGroupCapability',
     'ModelCapability',
     'OperationCapability',
     'ProviderResult',

@@ -24,10 +24,11 @@ def test_schema_normalizer_extracts_required_and_field_shapes() -> None:
         'additionalProperties': False,
     }
 
-    required, fields = normalize_operation_schema(input_schema)
+    required, fields, media_groups = normalize_operation_schema(input_schema)
 
     assert required == ['prompt']
     assert len(fields) == 4
+    assert media_groups == []
     prompt = next(field for field in fields if field.key == 'prompt')
     image_urls = next(field for field in fields if field.key == 'image_urls')
     assert prompt.required is True

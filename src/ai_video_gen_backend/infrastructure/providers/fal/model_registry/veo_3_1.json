@@ -1,0 +1,592 @@
+{
+  "sort_order": 20,
+  "model_key": "veo_3_1",
+  "display_name": "Veo 3.1",
+  "provider": "fal",
+  "media_type": "video",
+  "enabled": true,
+  "operations": [
+    {
+      "operation_key": "text_to_video",
+      "operation_type": "text_to_video",
+      "operation_name": "Text to Video",
+      "endpoint_id": "fal-ai/veo3.1",
+      "input_schema": {
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "The text prompt describing the video you want to generate."
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "16:9",
+              "9:16"
+            ],
+            "default": "16:9",
+            "description": "Aspect ratio of the generated video."
+          },
+          "duration": {
+            "type": "string",
+            "enum": [
+              "4s",
+              "6s",
+              "8s"
+            ],
+            "default": "8s",
+            "description": "The duration of the generated video."
+          },
+          "negative_prompt": {
+            "x_ui_group": "advanced",
+            "type": "string",
+            "description": "A negative prompt to guide the video generation."
+          },
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "720p",
+              "1080p",
+              "4k"
+            ],
+            "default": "720p",
+            "description": "The resolution of the generated video."
+          },
+          "generate_audio": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether to generate audio for the video."
+          },
+          "seed": {
+            "x_ui_group": "advanced",
+            "type": "integer",
+            "description": "The seed for the random number generator."
+          },
+          "auto_fix": {
+            "x_ui_group": "advanced",
+            "type": "boolean",
+            "default": true,
+            "description": "Whether to automatically attempt to fix prompts that fail content policy or other validation checks by rewriting them."
+          },
+          "safety_tolerance": {
+            "x_ui_group": "advanced",
+            "type": "string",
+            "enum": [
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6"
+            ],
+            "default": "4",
+            "description": "The safety tolerance level for content moderation. 1 is the most strict and 6 is the least strict."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operation_key": "text_to_video_fast",
+      "operation_type": "text_to_video",
+      "operation_name": "Text to Video (Fast)",
+      "endpoint_id": "fal-ai/veo3.1/fast",
+      "input_schema": {
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "The text prompt describing the video you want to generate."
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "16:9",
+              "9:16"
+            ],
+            "default": "16:9",
+            "description": "Aspect ratio of the generated video."
+          },
+          "duration": {
+            "type": "string",
+            "enum": [
+              "4s",
+              "6s",
+              "8s"
+            ],
+            "default": "8s",
+            "description": "The duration of the generated video."
+          },
+          "negative_prompt": {
+            "x_ui_group": "advanced",
+            "type": "string",
+            "description": "A negative prompt to guide the video generation."
+          },
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "720p",
+              "1080p",
+              "4k"
+            ],
+            "default": "720p",
+            "description": "The resolution of the generated video."
+          },
+          "generate_audio": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether to generate audio for the video."
+          },
+          "seed": {
+            "x_ui_group": "advanced",
+            "type": "integer",
+            "description": "The seed for the random number generator."
+          },
+          "auto_fix": {
+            "x_ui_group": "advanced",
+            "type": "boolean",
+            "default": true,
+            "description": "Whether to automatically attempt to fix prompts that fail content policy or other validation checks by rewriting them."
+          },
+          "safety_tolerance": {
+            "x_ui_group": "advanced",
+            "type": "string",
+            "enum": [
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6"
+            ],
+            "default": "4",
+            "description": "The safety tolerance level for content moderation. 1 is the most strict and 6 is the least strict."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operation_key": "first_last_frame_to_video_fast",
+      "operation_type": "first_last_frame_to_video",
+      "operation_name": "First/Last Frame to Video (Fast)",
+      "endpoint_id": "fal-ai/veo3.1/fast/first-last-frame-to-video",
+      "input_schema": {
+        "type": "object",
+        "x_ui_media_groups": [
+          {
+            "group_key": "frames",
+            "layout": "sequence",
+            "placement": "top"
+          }
+        ],
+        "required": [
+          "prompt",
+          "first_frame_url",
+          "last_frame_url"
+        ],
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "The text prompt describing the video you want to generate."
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "16:9",
+              "9:16"
+            ],
+            "default": "auto",
+            "description": "The aspect ratio of the generated video."
+          },
+          "duration": {
+            "type": "string",
+            "enum": [
+              "4s",
+              "6s",
+              "8s"
+            ],
+            "default": "8s",
+            "description": "The duration of the generated video."
+          },
+          "negative_prompt": {
+            "x_ui_group": "advanced",
+            "type": "string",
+            "description": "A negative prompt to guide the video generation."
+          },
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "720p",
+              "1080p",
+              "4k"
+            ],
+            "default": "720p",
+            "description": "The resolution of the generated video."
+          },
+          "generate_audio": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether to generate audio for the video."
+          },
+          "seed": {
+            "x_ui_group": "advanced",
+            "type": "integer",
+            "description": "The seed for the random number generator."
+          },
+          "auto_fix": {
+            "x_ui_group": "advanced",
+            "type": "boolean",
+            "default": false,
+            "description": "Whether to automatically attempt to fix prompts that fail content policy or other validation checks by rewriting them."
+          },
+          "safety_tolerance": {
+            "x_ui_group": "advanced",
+            "type": "string",
+            "enum": [
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6"
+            ],
+            "default": "4",
+            "description": "The safety tolerance level for content moderation. 1 is the most strict and 6 is the least strict."
+          },
+          "first_frame_url": {
+            "x_ui_media_group": "frames",
+            "x_ui_media_order": 1,
+            "x_ui_media_name": "Start",
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the first frame of the video."
+          },
+          "last_frame_url": {
+            "x_ui_media_group": "frames",
+            "x_ui_media_order": 2,
+            "x_ui_media_name": "End",
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the last frame of the video."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operation_key": "image_to_video_fast",
+      "operation_type": "image_to_video",
+      "operation_name": "Image to Video (Fast)",
+      "endpoint_id": "fal-ai/veo3.1/fast/image-to-video",
+      "input_schema": {
+        "type": "object",
+        "x_ui_media_groups": [
+          {
+            "group_key": "source",
+            "layout": "single",
+            "placement": "top"
+          }
+        ],
+        "required": [
+          "prompt",
+          "image_url"
+        ],
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "The text prompt describing the video you want to generate."
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "16:9",
+              "9:16"
+            ],
+            "default": "auto",
+            "description": "The aspect ratio of the generated video. Only 16:9 and 9:16 are supported."
+          },
+          "duration": {
+            "type": "string",
+            "enum": [
+              "4s",
+              "6s",
+              "8s"
+            ],
+            "default": "8s",
+            "description": "The duration of the generated video."
+          },
+          "negative_prompt": {
+            "x_ui_group": "advanced",
+            "type": "string",
+            "description": "A negative prompt to guide the video generation."
+          },
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "720p",
+              "1080p",
+              "4k"
+            ],
+            "default": "720p",
+            "description": "The resolution of the generated video."
+          },
+          "generate_audio": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether to generate audio for the video."
+          },
+          "seed": {
+            "x_ui_group": "advanced",
+            "type": "integer",
+            "description": "The seed for the random number generator."
+          },
+          "auto_fix": {
+            "x_ui_group": "advanced",
+            "type": "boolean",
+            "default": false,
+            "description": "Whether to automatically attempt to fix prompts that fail content policy or other validation checks by rewriting them."
+          },
+          "safety_tolerance": {
+            "x_ui_group": "advanced",
+            "type": "string",
+            "enum": [
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6"
+            ],
+            "default": "4",
+            "description": "The safety tolerance level for content moderation. 1 is the most strict and 6 is the least strict."
+          },
+          "image_url": {
+            "x_ui_media_group": "source",
+            "x_ui_media_name": "Source",
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the input image to animate."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operation_key": "first_last_frame_to_video",
+      "operation_type": "first_last_frame_to_video",
+      "operation_name": "First/Last Frame to Video",
+      "endpoint_id": "fal-ai/veo3.1/first-last-frame-to-video",
+      "input_schema": {
+        "type": "object",
+        "x_ui_media_groups": [
+          {
+            "group_key": "frames",
+            "layout": "sequence",
+            "placement": "top"
+          }
+        ],
+        "required": [
+          "prompt",
+          "first_frame_url",
+          "last_frame_url"
+        ],
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "The text prompt describing the video you want to generate."
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "16:9",
+              "9:16"
+            ],
+            "default": "auto",
+            "description": "The aspect ratio of the generated video."
+          },
+          "duration": {
+            "type": "string",
+            "enum": [
+              "4s",
+              "6s",
+              "8s"
+            ],
+            "default": "8s",
+            "description": "The duration of the generated video."
+          },
+          "negative_prompt": {
+            "x_ui_group": "advanced",
+            "type": "string",
+            "description": "A negative prompt to guide the video generation."
+          },
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "720p",
+              "1080p",
+              "4k"
+            ],
+            "default": "720p",
+            "description": "The resolution of the generated video."
+          },
+          "generate_audio": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether to generate audio for the video."
+          },
+          "seed": {
+            "x_ui_group": "advanced",
+            "type": "integer",
+            "description": "The seed for the random number generator."
+          },
+          "auto_fix": {
+            "x_ui_group": "advanced",
+            "type": "boolean",
+            "default": false,
+            "description": "Whether to automatically attempt to fix prompts that fail content policy or other validation checks by rewriting them."
+          },
+          "safety_tolerance": {
+            "x_ui_group": "advanced",
+            "type": "string",
+            "enum": [
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6"
+            ],
+            "default": "4",
+            "description": "The safety tolerance level for content moderation. 1 is the most strict and 6 is the least strict."
+          },
+          "first_frame_url": {
+            "x_ui_media_group": "frames",
+            "x_ui_media_order": 1,
+            "x_ui_media_name": "Start",
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the first frame of the video."
+          },
+          "last_frame_url": {
+            "x_ui_media_group": "frames",
+            "x_ui_media_order": 2,
+            "x_ui_media_name": "End",
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the last frame of the video."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operation_key": "image_to_video",
+      "operation_type": "image_to_video",
+      "operation_name": "Image to Video",
+      "endpoint_id": "fal-ai/veo3.1/image-to-video",
+      "input_schema": {
+        "type": "object",
+        "x_ui_media_groups": [
+          {
+            "group_key": "source",
+            "layout": "single",
+            "placement": "top"
+          }
+        ],
+        "required": [
+          "prompt",
+          "image_url"
+        ],
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "The text prompt describing the video you want to generate."
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "16:9",
+              "9:16"
+            ],
+            "default": "auto",
+            "description": "The aspect ratio of the generated video. Only 16:9 and 9:16 are supported."
+          },
+          "duration": {
+            "type": "string",
+            "enum": [
+              "4s",
+              "6s",
+              "8s"
+            ],
+            "default": "8s",
+            "description": "The duration of the generated video."
+          },
+          "negative_prompt": {
+            "x_ui_group": "advanced",
+            "type": "string",
+            "description": "A negative prompt to guide the video generation."
+          },
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "720p",
+              "1080p",
+              "4k"
+            ],
+            "default": "720p",
+            "description": "The resolution of the generated video."
+          },
+          "generate_audio": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether to generate audio for the video."
+          },
+          "seed": {
+            "x_ui_group": "advanced",
+            "type": "integer",
+            "description": "The seed for the random number generator."
+          },
+          "auto_fix": {
+            "x_ui_group": "advanced",
+            "type": "boolean",
+            "default": false,
+            "description": "Whether to automatically attempt to fix prompts that fail content policy or other validation checks by rewriting them."
+          },
+          "safety_tolerance": {
+            "x_ui_group": "advanced",
+            "type": "string",
+            "enum": [
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6"
+            ],
+            "default": "4",
+            "description": "The safety tolerance level for content moderation. 1 is the most strict and 6 is the least strict."
+          },
+          "image_url": {
+            "x_ui_media_group": "source",
+            "x_ui_media_name": "Source",
+            "type": "string",
+            "format": "uri",
+            "description": "URL of the input image to animate."
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  ]
+}
