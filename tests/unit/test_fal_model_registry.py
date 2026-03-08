@@ -18,12 +18,42 @@ def test_registry_lists_grouped_capabilities() -> None:
 
     capabilities = registry.list_capabilities()
 
-    assert len(capabilities.image) == 1
+    assert len(capabilities.image) == 3
     assert len(capabilities.video) == 2
-    assert capabilities.image[0].model_key == 'nano_banana'
+    assert [model.model_key for model in capabilities.image] == [
+        'nano_banana',
+        'nano_banana_pro',
+        'nano_banana_2',
+    ]
     assert capabilities.video[0].model_key == 'veo_3_1'
     assert capabilities.video[1].model_key == 'kling_video_2_6_pro'
     assert capabilities.image[0].operations[0].operation_type == 'text_to_image'
+    assert capabilities.image[1].operations[0].endpoint_id == 'fal-ai/nano-banana-pro'
+    assert capabilities.image[1].operations[1].endpoint_id == 'fal-ai/nano-banana-pro/edit'
+    assert capabilities.image[2].operations[0].endpoint_id == 'fal-ai/nano-banana-2'
+    assert capabilities.image[2].operations[1].endpoint_id == 'fal-ai/nano-banana-2/edit'
+    pro_text_to_image = capabilities.image[1].operations[0]
+    pro_aspect_ratio = next(
+        field for field in pro_text_to_image.fields if field.key == 'aspect_ratio'
+    )
+    assert pro_aspect_ratio.enum is not None
+    assert 'auto' in pro_aspect_ratio.enum
+    pro_resolution = next(field for field in pro_text_to_image.fields if field.key == 'resolution')
+    assert pro_resolution.enum == ['1K', '2K', '4K']
+    assert pro_resolution.default == '1K'
+    banana_2_text_to_image = capabilities.image[2].operations[0]
+    banana_2_aspect_ratio = next(
+        field for field in banana_2_text_to_image.fields if field.key == 'aspect_ratio'
+    )
+    assert banana_2_aspect_ratio.default == 'auto'
+    banana_2_resolution = next(
+        field for field in banana_2_text_to_image.fields if field.key == 'resolution'
+    )
+    assert banana_2_resolution.enum == ['0.5K', '1K', '2K', '4K']
+    banana_2_limit_generations = next(
+        field for field in banana_2_text_to_image.fields if field.key == 'limit_generations'
+    )
+    assert banana_2_limit_generations.default is True
     assert capabilities.video[0].operations[0].operation_name == 'Text to Video'
     assert capabilities.image[0].operations[0].fields[1].title == 'Number of Images'
     assert capabilities.image[0].operations[0].fields[1].minimum == 1
