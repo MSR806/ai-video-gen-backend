@@ -451,3 +451,87 @@ def test_finalize_output_success_raises_when_linked_item_missing() -> None:
                 'metadata': {},
             },
         )
+
+
+def test_finalize_output_success_raises_on_blank_provider_url() -> None:
+    output_id = uuid4()
+    collection_repo = FakeCollectionItemRepository(linked_item=_linked_item(output_id))
+    finalizer, _ = _build_finalizer(collection_repo=collection_repo)
+
+    with pytest.raises(GenerationFinalizationError, match='valid output URL'):
+        finalizer.finalize_output_success(
+            output_id=output_id,
+            output={
+                'index': 0,
+                'media_type': 'image',
+                'provider_url': '   ',
+                'metadata': {},
+            },
+        )
+
+
+def test_finalize_output_success_raises_when_download_fails() -> None:
+    output_id = uuid4()
+    collection_repo = FakeCollectionItemRepository(linked_item=_linked_item(output_id))
+    finalizer, _ = _build_finalizer(
+        collection_repo=collection_repo,
+        downloader=FakeMediaDownloader(fail=True),
+    )
+
+    with pytest.raises(GenerationFinalizationError, match='download failed'):
+        finalizer.finalize_output_success(
+            output_id=output_id,
+            output={
+                'index': 0,
+                'media_type': 'image',
+                'provider_url': 'https://provider.test/image.png',
+                'metadata': {},
+            },
+        )
+
+
+def test_finalize_output_success_raises_when_storage_upload_fails() -> None:
+    output_id = uuid4()
+    collection_repo = FakeCollectionItemRepository(linked_item=_linked_item(output_id))
+    finalizer, _ = _build_finalizer(
+        collection_repo=collection_repo,
+        storage=FakeObjectStorage(fail=True),
+    )
+
+    with pytest.raises(GenerationFinalizationError, match='Failed to store generated output'):
+        finalizer.finalize_output_success(
+            output_id=output_id,
+            output={
+                'index': 0,
+                'media_type': 'image',
+                'provider_url': 'https://provider.test/image.png',
+                'metadata': {},
+            },
+        )
+
+
+def test_finalize_video_output_falls_back_to_empty_thumbnail_when_generation_fails() -> None:
+    output_id = uuid4()
+    collection_repo = FakeCollectionItemRepository(linked_item=_linked_item(output_id))
+    finalizer, run_repo = _build_finalizer(
+        collection_repo=collection_repo,
+        thumbnail=FakeVideoThumbnailGenerator(fail=True),
+    )
+
+    finalizer.finalize_output_success(
+        output_id=output_id,
+        output={
+            'index': 0,
+            'media_type': 'video',
+            'provider_url': 'https://provider.test/video.mp4',
+            'metadata': {},
+        },
+    )
+
+    metadata = collection_repo.ready_calls[0]['metadata']
+    assert isinstance(metadata, dict)
+    assert metadata.get('thumbnailUrl') == ''
+
+    stored_output = run_repo.ready_calls[0]['stored_output_json']
+    assert isinstance(stored_output, dict)
+    assert stored_output.get('thumbnailUrl') == ''
