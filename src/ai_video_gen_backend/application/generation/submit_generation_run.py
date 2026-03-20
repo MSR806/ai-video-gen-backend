@@ -155,7 +155,7 @@ class SubmitGenerationRunUseCase:
                     collection_id=request.collection_id,
                     media_type=resolved_operation.media_type,
                     name=self._item_name(request.inputs),
-                    description='AI generation in progress',
+                    description=self._item_description(request.inputs),
                     url=None,
                     metadata=self._placeholder_metadata(
                         model_key=request.model_key,
@@ -227,6 +227,13 @@ class SubmitGenerationRunUseCase:
         if len(trimmed) == 0:
             return 'Generated Asset'
         return trimmed[:80]
+
+    def _item_description(self, inputs: JsonObject) -> str:
+        prompt_raw = inputs.get('prompt')
+        if not isinstance(prompt_raw, str):
+            return ''
+
+        return prompt_raw.strip()
 
     def _placeholder_metadata(
         self,
