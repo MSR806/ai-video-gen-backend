@@ -469,6 +469,10 @@ def test_submit_generation_run_creates_outputs_and_placeholders() -> None:
     assert submission.run.status == 'IN_PROGRESS'
     assert len(submission.outputs) == 2
     assert len(collection_repo.created_payloads) == 2
+    assert all(
+        payload.description == 'a cinematic portrait'
+        for payload in collection_repo.created_payloads
+    )
     assert run_repo.created_run is not None
     assert run_repo.created_run.requested_output_count == 2
     assert len(provider.submit_calls) == 1
@@ -491,6 +495,23 @@ def test_submit_generation_run_rejects_output_count_outside_bounds() -> None:
 
     with pytest.raises(InvalidOutputCountError):
         use_case.execute(request)
+
+
+def test_submit_generation_run_stores_trimmed_prompt_in_description() -> None:
+    use_case, _, collection_repo, _ = _build_use_case(supports_batch=True)
+    request = GenerationRunRequest(
+        project_id=uuid4(),
+        collection_id=uuid4(),
+        model_key='nano_banana',
+        operation_key='text_to_image',
+        inputs={'prompt': '  moody cyberpunk alley  '},
+        output_count=1,
+    )
+
+    use_case.execute(request)
+
+    assert len(collection_repo.created_payloads) == 1
+    assert collection_repo.created_payloads[0].description == 'moody cyberpunk alley'
 
 
 def test_submit_generation_run_rejects_non_batch_operation_when_multiple_outputs() -> None:
