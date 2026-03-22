@@ -377,3 +377,61 @@ def test_reconcile_generation_run_marks_failed_when_provider_fails() -> None:
     assert len(finalizer.failure_calls) == 2
     assert repository.marked_failed is True
     assert updated.status == 'FAILED'
+
+
+def test_reconcile_generation_run_returns_early_for_terminal_status() -> None:
+    run = _copy_run(_run_fixture(), status='SUCCEEDED')
+    outputs = [_output_fixture(run.id, 0)]
+    repository = FakeGenerationRunRepository(run, outputs)
+    provider = FakeProvider(
+        status=ProviderStatus(status='IN_PROGRESS'),
+        result=ProviderResult(status='FAILED', outputs=[], raw_response={}, error_message='failed'),
+    )
+    finalizer = FakeFinalizer(repository)
+    use_case = ReconcileGenerationRunUseCase(repository, provider, finalizer)  # type: ignore[arg-type]
+
+    updated = use_case.execute(run)
+
+    assert updated is run
+    assert repository.marked_in_progress is False
+    assert finalizer.success_calls == []
+    assert finalizer.failure_calls == []
+
+
+def test_reconcile_generation_run_returns_early_without_provider_request_id() -> None:
+    run = _copy_run(_run_fixture(), provider_request_id=None)
+    outputs = [_output_fixture(run.id, 0)]
+    repository = FakeGenerationRunRepository(run, outputs)
+    provider = FakeProvider(
+        status=ProviderStatus(status='IN_PROGRESS'),
+        result=ProviderResult(status='FAILED', outputs=[], raw_response={}, error_message='failed'),
+    )
+    finalizer = FakeFinalizer(repository)
+    use_case = ReconcileGenerationRunUseCase(repository, provider, finalizer)  # type: ignore[arg-type]
+
+    updated = use_case.execute(run)
+
+    assert updated is run
+    assert repository.marked_in_progress is False
+    assert finalizer.success_calls == []
+    assert finalizer.failure_calls == []
+
+
+def test_reconcile_generation_run_marks_cancelled_when_provider_reports_cancelled() -> None:
+    run = _run_fixture()
+    outputs = [_output_fixture(run.id, 0), _output_fixture(run.id, 1)]
+    repository = FakeGenerationRunRepository(run, outputs)
+    provider = FakeProvider(
+        status=ProviderStatus(status='CANCELLED'),
+        result=ProviderResult(
+            status='FAILED', outputs=[], raw_response={}, error_message='cancelled'
+        ),
+    )
+    finalizer = FakeFinalizer(repository)
+    use_case = ReconcileGenerationRunUseCase(repository, provider, finalizer)  # type: ignore[arg-type]
+
+    updated = use_case.execute(run)
+
+    assert len(finalizer.failure_calls) == 2
+    assert repository.marked_cancelled is True
+    assert updated.status == 'CANCELLED'
