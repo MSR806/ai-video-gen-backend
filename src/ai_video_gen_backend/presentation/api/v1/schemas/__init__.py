@@ -2,6 +2,7 @@ from .collection_item_schema import (
     CollectionItemReadResponse,
     CollectionItemResponse,
     CreateCollectionItemRequest,
+    SetCollectionItemFavoriteRequest,
 )
 from .collection_schema import (
     CollectionContentsResponse,
@@ -43,4 +44,5 @@ __all__ = [
     'SceneResponse',
     'SceneSyncResponse',
     'SceneUpdateRequest',
+    'SetCollectionItemFavoriteRequest',
 ]

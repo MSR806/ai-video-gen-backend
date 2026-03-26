@@ -67,6 +67,7 @@ class CollectionItem:
     storage_key: str | None = None
     mime_type: str | None = None
     size_bytes: int | None = None
+    is_favorite: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +89,7 @@ class CollectionItemCreationPayload:
     storage_key: str | None = None
     mime_type: str | None = None
     size_bytes: int | None = None
+    is_favorite: bool = False
 
 
 @dataclass(frozen=True, slots=True)

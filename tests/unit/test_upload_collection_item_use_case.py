@@ -108,6 +108,10 @@ class FakeCollectionItemRepository:
         del item_id, error_message
         return None
 
+    def set_item_favorite(self, *, item_id: UUID, is_favorite: bool) -> CollectionItem | None:
+        del item_id, is_favorite
+        return None
+
     def generate_item(self, params: CollectionItemGenerationParams) -> GeneratedCollectionItem:
         del params
         raise NotImplementedError

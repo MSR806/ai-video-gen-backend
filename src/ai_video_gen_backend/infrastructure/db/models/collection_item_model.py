@@ -79,6 +79,12 @@ class CollectionItemModel(Base):
     storage_key: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     mime_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
     size_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    is_favorite: Mapped[bool] = mapped_column(
+        sa.Boolean,
+        nullable=False,
+        default=False,
+        server_default=sa.false(),
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

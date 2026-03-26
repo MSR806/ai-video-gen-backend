@@ -32,6 +32,7 @@ class CollectionItemResponse(StrictSchema):
     storage_key: str | None = Field(default=None, alias='storageKey')
     mime_type: str | None = Field(default=None, alias='mimeType')
     size_bytes: int | None = Field(default=None, alias='sizeBytes')
+    is_favorite: bool = Field(alias='isFavorite')
     created_at: datetime = Field(alias='createdAt')
     updated_at: datetime = Field(alias='updatedAt')
 
@@ -56,6 +57,7 @@ class CollectionItemResponse(StrictSchema):
             storage_key=item.storage_key,
             mime_type=item.mime_type,
             size_bytes=item.size_bytes,
+            is_favorite=item.is_favorite,
             created_at=item.created_at,
             updated_at=item.updated_at,
         )
@@ -74,6 +76,7 @@ class CollectionItemReadResponse(StrictSchema):
     generation_error_message: str | None = Field(default=None, alias='generationErrorMessage')
     run_id: UUID | None = Field(default=None, alias='runId')
     generation_run_output_id: UUID | None = Field(default=None, alias='generationRunOutputId')
+    is_favorite: bool = Field(alias='isFavorite')
 
     @classmethod
     def from_domain(cls, item: CollectionItem) -> CollectionItemReadResponse:
@@ -90,7 +93,12 @@ class CollectionItemReadResponse(StrictSchema):
             generation_error_message=item.generation_error_message,
             run_id=item.run_id,
             generation_run_output_id=item.generation_run_output_id,
+            is_favorite=item.is_favorite,
         )
+
+
+class SetCollectionItemFavoriteRequest(StrictSchema):
+    is_favorite: bool = Field(alias='isFavorite', strict=True)
 
 
 class CreateCollectionItemRequest(StrictSchema):

@@ -373,6 +373,7 @@ def test_get_collection_items_returns_seeded_items(client: TestClient, db_sessio
     assert payload['childCollections'] == []
     assert len(items) == 1
     assert items[0]['name'] == 'Seed Item'
+    assert items[0]['isFavorite'] is False
     assert 'storageProvider' not in items[0]
     assert 'storageBucket' not in items[0]
     assert 'storageKey' not in items[0]
@@ -392,6 +393,7 @@ def test_get_collection_item_by_id_returns_item(client: TestClient, db_session: 
     payload = response.json()
     assert payload['id'] == str(ids['item_id'])
     assert payload['name'] == 'Seed Item'
+    assert payload['isFavorite'] is False
     assert 'storageProvider' not in payload
     assert 'storageBucket' not in payload
     assert 'storageKey' not in payload
@@ -429,6 +431,95 @@ def test_create_collection_item_success(client: TestClient, db_session: Session)
     payload = response.json()
     assert payload['name'] == 'Created Item'
     assert payload['mediaType'] == 'image'
+    assert payload['isFavorite'] is False
+
+
+def test_update_collection_item_favorite_success(client: TestClient, db_session: Session) -> None:
+    ids = seed_baseline_data(db_session)
+
+    response = client.patch(
+        f'/api/v1/collections/{ids["collection_id"]}/items/{ids["item_id"]}',
+        json={'isFavorite': True},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['id'] == str(ids['item_id'])
+    assert payload['isFavorite'] is True
+
+    item_response = client.get(f'/api/v1/collection-items/{ids["item_id"]}')
+    assert item_response.status_code == 200
+    assert item_response.json()['isFavorite'] is True
+
+
+def test_update_collection_item_favorite_collection_not_found_returns_404(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+
+    response = client.patch(
+        f'/api/v1/collections/{uuid4()}/items/{ids["item_id"]}',
+        json={'isFavorite': True},
+    )
+
+    assert response.status_code == 404
+    assert response.json()['error']['code'] == 'collection_not_found'
+
+
+def test_update_collection_item_favorite_item_not_found_returns_404(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+
+    response = client.patch(
+        f'/api/v1/collections/{ids["collection_id"]}/items/{uuid4()}',
+        json={'isFavorite': True},
+    )
+
+    assert response.status_code == 404
+    assert response.json()['error']['code'] == 'collection_item_not_found'
+
+
+def test_update_collection_item_favorite_with_mismatched_collection_returns_404(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+
+    sibling_response = client.post(
+        f'/api/v1/projects/{ids["project_id"]}/collections',
+        json={
+            'name': 'Sibling Collection',
+            'tag': 'folder',
+            'description': 'Collection for mismatch test',
+        },
+    )
+    assert sibling_response.status_code == 201
+    sibling_collection_id = sibling_response.json()['id']
+
+    response = client.patch(
+        f'/api/v1/collections/{sibling_collection_id}/items/{ids["item_id"]}',
+        json={'isFavorite': True},
+    )
+
+    assert response.status_code == 404
+    assert response.json()['error']['code'] == 'collection_item_not_found'
+
+
+def test_update_collection_item_favorite_with_invalid_payload_returns_422(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+
+    response = client.patch(
+        f'/api/v1/collections/{ids["collection_id"]}/items/{ids["item_id"]}',
+        json={'isFavorite': 'yes'},
+    )
+
+    assert response.status_code == 422
 
 
 def test_delete_collection_item_success(client: TestClient, db_session: Session) -> None:

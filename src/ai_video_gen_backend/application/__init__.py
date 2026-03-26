@@ -9,6 +9,7 @@ from .collection_item import (
     DeleteCollectionItemUseCase,
     GetCollectionItemsUseCase,
     PayloadTooLargeError,
+    SetCollectionItemFavoriteUseCase,
     UnsupportedMediaTypeError,
     UploadCollectionItemUseCase,
 )
@@ -59,6 +60,7 @@ __all__ = [
     'InvalidOutputCountError',
     'PayloadTooLargeError',
     'ReconcileGenerationRunUseCase',
+    'SetCollectionItemFavoriteUseCase',
     'SubmitGenerationRunUseCase',
     'UnsupportedBatchOutputCountError',
     'UnsupportedMediaTypeError',

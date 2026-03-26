@@ -17,6 +17,7 @@ from ai_video_gen_backend.application.collection_item import (
     DeleteCollectionItemUseCase,
     GetCollectionItemByIdUseCase,
     GetCollectionItemsUseCase,
+    SetCollectionItemFavoriteUseCase,
     UploadCollectionItemUseCase,
 )
 from ai_video_gen_backend.application.generation import (
@@ -58,6 +59,7 @@ from ai_video_gen_backend.presentation.api.v1.schemas import (
     CreateCollectionItemRequest,
     GenerationRunSubmitRequest,
     GenerationRunSubmitResponse,
+    SetCollectionItemFavoriteRequest,
 )
 
 router = APIRouter(tags=['collections'])
@@ -253,6 +255,36 @@ def delete_collection_item(
             code='collection_item_not_found',
             message='Collection item not found',
         )
+
+
+@router.patch(
+    '/collections/{collection_id}/items/{item_id}',
+    response_model=CollectionItemReadResponse,
+)
+def update_collection_item(
+    collection_id: UUID,
+    item_id: UUID,
+    request: SetCollectionItemFavoriteRequest,
+    session: Session = Depends(get_db_session),
+) -> CollectionItemReadResponse:
+    collection_use_case = GetCollectionByIdUseCase(CollectionSqlRepository(session))
+    if collection_use_case.execute(collection_id) is None:
+        raise ApiError(status_code=404, code='collection_not_found', message='Collection not found')
+
+    use_case = SetCollectionItemFavoriteUseCase(CollectionItemSqlRepository(session))
+    updated_item = use_case.execute(
+        collection_id=collection_id,
+        item_id=item_id,
+        is_favorite=request.is_favorite,
+    )
+    if updated_item is None:
+        raise ApiError(
+            status_code=404,
+            code='collection_item_not_found',
+            message='Collection item not found',
+        )
+
+    return CollectionItemReadResponse.from_domain(updated_item)
 
 
 @router.post(

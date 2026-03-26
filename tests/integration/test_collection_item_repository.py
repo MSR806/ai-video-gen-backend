@@ -156,3 +156,52 @@ def test_collection_item_repository_raises_semantic_constraint_error(
 
     with pytest.raises(CollectionItemConstraintViolationError):
         repository.create_item(payload)
+
+
+def test_collection_item_repository_sets_item_favorite(db_session: Session) -> None:
+    project_id = uuid4()
+    collection_id = uuid4()
+
+    db_session.add(
+        ProjectModel(
+            id=project_id,
+            name='Project',
+            description='Project for favorite mapping',
+            status='draft',
+        )
+    )
+    db_session.add(
+        CollectionModel(
+            id=collection_id,
+            project_id=project_id,
+            name='Collection',
+            tag='ref',
+            description='Collection for favorite mapping',
+        )
+    )
+    db_session.commit()
+
+    repository = CollectionItemSqlRepository(db_session)
+    created = repository.create_item(
+        CollectionItemCreationPayload(
+            project_id=project_id,
+            collection_id=collection_id,
+            media_type='image',
+            name='Favorite Me',
+            description='Favorite candidate',
+            url='http://localhost:9000/ai-video-gen-media/favorite.jpg',
+            metadata={'width': 100, 'height': 100, 'format': 'jpg', 'thumbnailUrl': ''},
+            generation_source='upload',
+        )
+    )
+    assert created.is_favorite is False
+
+    updated = repository.set_item_favorite(item_id=created.id, is_favorite=True)
+    assert updated is not None
+    assert updated.is_favorite is True
+
+    fetched = repository.get_item_by_id(created.id)
+    assert fetched is not None
+    assert fetched.is_favorite is True
+
+    assert repository.set_item_favorite(item_id=uuid4(), is_favorite=True) is None

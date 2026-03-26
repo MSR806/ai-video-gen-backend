@@ -72,6 +72,7 @@ class CollectionItemSqlRepository:
             storage_key=payload.storage_key,
             mime_type=payload.mime_type,
             size_bytes=payload.size_bytes,
+            is_favorite=payload.is_favorite,
         )
         self._session.add(model)
         try:
@@ -133,6 +134,16 @@ class CollectionItemSqlRepository:
         self._session.refresh(model)
         return self._to_domain(model)
 
+    def set_item_favorite(self, *, item_id: UUID, is_favorite: bool) -> CollectionItem | None:
+        model = self._session.get(CollectionItemModel, item_id)
+        if model is None:
+            return None
+
+        model.is_favorite = is_favorite
+        self._session.commit()
+        self._session.refresh(model)
+        return self._to_domain(model)
+
     def _to_domain(self, model: CollectionItemModel) -> CollectionItem:
         metadata: dict[str, JsonValue] = model.metadata_json
         return CollectionItem(
@@ -154,6 +165,7 @@ class CollectionItemSqlRepository:
             storage_key=model.storage_key,
             mime_type=model.mime_type,
             size_bytes=model.size_bytes,
+            is_favorite=model.is_favorite,
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
