@@ -68,6 +68,49 @@ def test_rejects_gallery_media_group_with_non_uri_items() -> None:
         normalize_operation_schema(cast(JsonObject, schema))
 
 
+def test_rejects_non_list_media_groups() -> None:
+    schema = {
+        'type': 'object',
+        'x_ui_media_groups': {'group_key': 'inputs', 'layout': 'single', 'placement': 'top'},
+    }
+
+    with pytest.raises(CapabilityRegistryError, match='x_ui_media_groups must be a list'):
+        normalize_operation_schema(cast(JsonObject, schema))
+
+
+def test_rejects_media_group_with_invalid_placement() -> None:
+    schema = {
+        'type': 'object',
+        'x_ui_media_groups': [{'group_key': 'inputs', 'layout': 'single', 'placement': 'left'}],
+        'properties': {
+            'image_url': {
+                'type': 'string',
+                'format': 'uri',
+                'x_ui_media_group': 'inputs',
+            }
+        },
+    }
+
+    with pytest.raises(CapabilityRegistryError, match='placement must be one of'):
+        normalize_operation_schema(cast(JsonObject, schema))
+
+
+def test_rejects_media_name_without_media_group() -> None:
+    schema = {
+        'type': 'object',
+        'properties': {
+            'image_url': {
+                'type': 'string',
+                'format': 'uri',
+                'x_ui_media_name': 'Cover image',
+            }
+        },
+    }
+
+    with pytest.raises(CapabilityRegistryError, match='x_ui_media_name without x_ui_media_group'):
+        normalize_operation_schema(cast(JsonObject, schema))
+
+
 def test_accepts_valid_gallery_media_group() -> None:
     schema = {
         'type': 'object',
