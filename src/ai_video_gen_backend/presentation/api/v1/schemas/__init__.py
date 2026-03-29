@@ -1,3 +1,4 @@
+from .chat_schema import ChatRequest, ChatResponse
 from .collection_item_schema import (
     CollectionItemReadResponse,
     CollectionItemResponse,
@@ -27,6 +28,8 @@ from .scene_schema import (
 )
 
 __all__ = [
+    'ChatRequest',
+    'ChatResponse',
     'CollectionContentsResponse',
     'CollectionItemReadResponse',
     'CollectionItemResponse',

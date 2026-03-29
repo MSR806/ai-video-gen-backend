@@ -1,3 +1,14 @@
+from .chat import (
+    ChatImageInput,
+    ChatInputMessage,
+    ChatMessage,
+    ChatModelPort,
+    ChatRepositoryPort,
+    ChatRole,
+    ChatThread,
+    ChatWorkflowPort,
+    SendChatResult,
+)
 from .collection import Collection, CollectionRepositoryPort
 from .collection_item import (
     CollectionItem,
@@ -35,6 +46,14 @@ from .scene import Scene, SceneCreateInput, SceneRepositoryPort, SceneUpdateInpu
 from .types import JsonObject, JsonValue
 
 __all__ = [
+    'ChatImageInput',
+    'ChatInputMessage',
+    'ChatMessage',
+    'ChatModelPort',
+    'ChatRepositoryPort',
+    'ChatRole',
+    'ChatThread',
+    'ChatWorkflowPort',
     'Collection',
     'CollectionItem',
     'CollectionItemCreationPayload',
@@ -71,6 +90,7 @@ __all__ = [
     'SceneCreateInput',
     'SceneRepositoryPort',
     'SceneUpdateInput',
+    'SendChatResult',
     'StorageError',
     'StoredObject',
 ]

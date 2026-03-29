@@ -1,3 +1,4 @@
+from .chat import ChatThreadNotFoundError, InvalidChatMessagesError, SendChatMessageUseCase
 from .collection import (
     CreateCollectionUseCase,
     GetChildCollectionsUseCase,
@@ -37,6 +38,7 @@ from .scene import (
 )
 
 __all__ = [
+    'ChatThreadNotFoundError',
     'CreateCollectionItemUseCase',
     'CreateCollectionUseCase',
     'CreateProjectUseCase',
@@ -56,10 +58,12 @@ __all__ = [
     'GetProjectCollectionsUseCase',
     'GetProjectScenesUseCase',
     'HandleFalWebhookUseCase',
+    'InvalidChatMessagesError',
     'InvalidGenerationInputsError',
     'InvalidOutputCountError',
     'PayloadTooLargeError',
     'ReconcileGenerationRunUseCase',
+    'SendChatMessageUseCase',
     'SetCollectionItemFavoriteUseCase',
     'SubmitGenerationRunUseCase',
     'UnsupportedBatchOutputCountError',

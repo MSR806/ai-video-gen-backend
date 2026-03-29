@@ -1,3 +1,5 @@
+from .chat_message_model import ChatMessageModel
+from .chat_thread_model import ChatThreadModel
 from .collection_item_model import CollectionItemModel
 from .collection_model import CollectionModel
 from .generation_run_model import GenerationRunModel
@@ -6,6 +8,8 @@ from .project_model import ProjectModel
 from .scene_model import SceneModel
 
 __all__ = [
+    'ChatMessageModel',
+    'ChatThreadModel',
     'CollectionItemModel',
     'CollectionModel',
     'GenerationRunModel',

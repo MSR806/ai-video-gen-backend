@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,6 +28,10 @@ class Settings(BaseSettings):
     generation_status_reconcile_after_seconds: int = 2
     generation_result_max_download_mb: int = 25
     generation_registry_cache_ttl_seconds: int = 300
+    portkey_api_key: str = Field(default='', validation_alias='PORTKEY_API_KEY')
+    chat_provider_base_url: str | None = 'https://api.portkey.ai/v1'
+    chat_model_name: str = '@openai/gpt-5.4-mini'
+    chat_model_temperature: float = 0.2
 
     model_config = SettingsConfigDict(
         env_file=('.env', '.env.local'),
