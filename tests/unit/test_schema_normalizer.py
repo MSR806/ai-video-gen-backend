@@ -131,3 +131,63 @@ def test_accepts_valid_gallery_media_group() -> None:
     assert len(fields) == 1
     assert fields[0].media_group == 'gallery'
     assert groups[0].group_key == 'gallery'
+
+
+def test_rejects_duplicate_media_group_keys() -> None:
+    schema = {
+        'type': 'object',
+        'x_ui_media_groups': [
+            {'group_key': 'inputs', 'layout': 'single', 'placement': 'top'},
+            {'group_key': 'inputs', 'layout': 'sequence', 'placement': 'top'},
+        ],
+        'properties': {
+            'image_url': {
+                'type': 'string',
+                'format': 'uri',
+                'x_ui_media_group': 'inputs',
+            }
+        },
+    }
+
+    with pytest.raises(CapabilityRegistryError, match=r'Duplicate x_ui_media_groups\.group_key'):
+        normalize_operation_schema(cast(JsonObject, schema))
+
+
+def test_rejects_unknown_media_group_reference() -> None:
+    schema = {
+        'type': 'object',
+        'x_ui_media_groups': [{'group_key': 'known', 'layout': 'single', 'placement': 'top'}],
+        'properties': {
+            'image_url': {
+                'type': 'string',
+                'format': 'uri',
+                'x_ui_media_group': 'unknown',
+            }
+        },
+    }
+
+    with pytest.raises(CapabilityRegistryError, match='references unknown x_ui_media_group'):
+        normalize_operation_schema(cast(JsonObject, schema))
+
+
+def test_rejects_sequence_member_missing_order() -> None:
+    schema = {
+        'type': 'object',
+        'x_ui_media_groups': [{'group_key': 'inputs', 'layout': 'sequence', 'placement': 'top'}],
+        'properties': {
+            'first_image_url': {
+                'type': 'string',
+                'format': 'uri',
+                'x_ui_media_group': 'inputs',
+                'x_ui_media_order': 1,
+            },
+            'second_image_url': {
+                'type': 'string',
+                'format': 'uri',
+                'x_ui_media_group': 'inputs',
+            },
+        },
+    }
+
+    with pytest.raises(CapabilityRegistryError, match='must define x_ui_media_order'):
+        normalize_operation_schema(cast(JsonObject, schema))
