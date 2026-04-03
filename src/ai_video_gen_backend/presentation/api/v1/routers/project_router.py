@@ -17,6 +17,7 @@ from ai_video_gen_backend.application.project import (
 from ai_video_gen_backend.domain.collection import CollectionCreationPayload
 from ai_video_gen_backend.domain.project import ProjectCreationPayload
 from ai_video_gen_backend.infrastructure.repositories import (
+    CollectionItemSqlRepository,
     CollectionSqlRepository,
     ProjectSqlRepository,
 )
@@ -73,9 +74,17 @@ def get_project_collections(
         raise ApiError(status_code=404, code='project_not_found', message='Project not found')
 
     collections_use_case = GetProjectCollectionsUseCase(CollectionSqlRepository(session))
+    collections = collections_use_case.execute(project_id)
+    item_repository = CollectionItemSqlRepository(session)
+    thumbnail_urls = item_repository.get_first_item_thumbnail_urls_by_collection_ids(
+        [collection.id for collection in collections]
+    )
     return [
-        CollectionResponse.from_domain(collection)
-        for collection in collections_use_case.execute(project_id)
+        CollectionResponse.from_domain(
+            collection,
+            thumbnail_url=thumbnail_urls.get(collection.id),
+        )
+        for collection in collections
     ]
 
 

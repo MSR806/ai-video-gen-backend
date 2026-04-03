@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import cast
 from uuid import UUID
 
+import sqlalchemy as sa
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -29,6 +30,51 @@ class CollectionItemSqlRepository:
         )
         records = self._session.execute(stmt).scalars().all()
         return [self._to_domain(record) for record in records]
+
+    def get_first_item_thumbnail_url_by_collection_id(self, collection_id: UUID) -> str | None:
+        stmt = (
+            select(CollectionItemModel.metadata_json)
+            .where(CollectionItemModel.collection_id == collection_id)
+            .order_by(CollectionItemModel.created_at.asc())
+            .limit(1)
+        )
+        metadata = self._session.execute(stmt).scalar_one_or_none()
+        if not isinstance(metadata, dict):
+            return None
+        return self._extract_thumbnail_url(metadata)
+
+    def get_first_item_thumbnail_urls_by_collection_ids(
+        self, collection_ids: list[UUID]
+    ) -> dict[UUID, str | None]:
+        if not collection_ids:
+            return {}
+
+        result: dict[UUID, str | None] = dict.fromkeys(collection_ids)
+        row_number = sa.func.row_number().over(
+            partition_by=CollectionItemModel.collection_id,
+            order_by=CollectionItemModel.created_at.asc(),
+        )
+
+        first_item_per_collection = (
+            select(
+                CollectionItemModel.collection_id.label('collection_id'),
+                CollectionItemModel.metadata_json.label('metadata_json'),
+                row_number.label('row_number'),
+            )
+            .where(CollectionItemModel.collection_id.in_(collection_ids))
+            .subquery()
+        )
+        stmt = select(
+            first_item_per_collection.c.collection_id,
+            first_item_per_collection.c.metadata_json,
+        ).where(first_item_per_collection.c.row_number == 1)
+
+        rows = self._session.execute(stmt).all()
+        for collection_id, metadata in rows:
+            if isinstance(metadata, dict):
+                result[collection_id] = self._extract_thumbnail_url(metadata)
+
+        return result
 
     def get_item_by_id(self, item_id: UUID) -> CollectionItem | None:
         stmt = select(CollectionItemModel).where(CollectionItemModel.id == item_id)
@@ -169,3 +215,10 @@ class CollectionItemSqlRepository:
             created_at=model.created_at,
             updated_at=model.updated_at,
         )
+
+    @staticmethod
+    def _extract_thumbnail_url(metadata: dict[str, JsonValue]) -> str | None:
+        thumbnail_url = metadata.get('thumbnailUrl')
+        if isinstance(thumbnail_url, str) and thumbnail_url.strip() != '':
+            return thumbnail_url
+        return None

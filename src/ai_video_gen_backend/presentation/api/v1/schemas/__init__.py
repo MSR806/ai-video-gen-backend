@@ -9,6 +9,7 @@ from .collection_schema import (
     CollectionContentsResponse,
     CollectionResponse,
     CreateCollectionRequest,
+    resolve_collection_thumbnail_url,
 )
 from .error_schema import ErrorEnvelope
 from .generation_capability_schema import GenerationCapabilitiesResponse
@@ -48,4 +49,5 @@ __all__ = [
     'SceneSyncResponse',
     'SceneUpdateRequest',
     'SetCollectionItemFavoriteRequest',
+    'resolve_collection_thumbnail_url',
 ]

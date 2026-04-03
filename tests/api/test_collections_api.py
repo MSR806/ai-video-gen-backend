@@ -235,6 +235,7 @@ def test_create_collection_success(client: TestClient, db_session: Session) -> N
     assert payload['tag'] == 'reference'
     assert payload['projectId'] == str(ids['project_id'])
     assert payload['parentCollectionId'] is None
+    assert payload['thumbnailUrl'] is None
 
 
 def test_create_child_collection_success(client: TestClient, db_session: Session) -> None:
@@ -265,12 +266,85 @@ def test_create_child_collection_success(client: TestClient, db_session: Session
     payload = child_response.json()
     assert payload['name'] == 'Child Collection'
     assert payload['parentCollectionId'] == parent_id
+    assert payload['thumbnailUrl'] is None
 
     list_response = client.get(f'/api/v1/projects/{ids["project_id"]}/collections')
     assert list_response.status_code == 200
     listed = list_response.json()
+    listed_seed = next(
+        collection for collection in listed if collection['id'] == str(ids['collection_id'])
+    )
     listed_child = next(collection for collection in listed if collection['id'] == payload['id'])
+    assert listed_seed['thumbnailUrl'] == 'https://example.com/seed-item-thumb.jpg'
     assert listed_child['parentCollectionId'] == parent_id
+    assert listed_child['thumbnailUrl'] is None
+
+
+def test_get_collection_returns_thumbnail_url(client: TestClient, db_session: Session) -> None:
+    ids = seed_baseline_data(db_session)
+
+    response = client.get(f'/api/v1/collections/{ids["collection_id"]}')
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['id'] == str(ids['collection_id'])
+    assert payload['thumbnailUrl'] == 'https://example.com/seed-item-thumb.jpg'
+
+
+def test_get_collection_thumbnail_uses_first_item_only(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+
+    collection_response = client.post(
+        f'/api/v1/projects/{ids["project_id"]}/collections',
+        json={
+            'name': 'First-item semantics collection',
+            'tag': 'folder',
+            'description': 'Validates first item only behavior',
+        },
+    )
+    assert collection_response.status_code == 201
+    collection_id = collection_response.json()['id']
+
+    first_item_response = client.post(
+        f'/api/v1/collections/{collection_id}/items',
+        json={
+            'projectId': str(ids['project_id']),
+            'mediaType': 'image',
+            'name': 'Earlier no-thumb item',
+            'description': 'First item has no thumbnail',
+            'url': 'https://example.com/first-item.jpg',
+            'metadata': {'width': 100, 'height': 100, 'format': 'jpg', 'thumbnailUrl': ''},
+            'generationSource': 'upload',
+        },
+    )
+    assert first_item_response.status_code == 201
+
+    second_item_response = client.post(
+        f'/api/v1/collections/{collection_id}/items',
+        json={
+            'projectId': str(ids['project_id']),
+            'mediaType': 'image',
+            'name': 'Later thumb item',
+            'description': 'Second item has thumbnail',
+            'url': 'https://example.com/second-item.jpg',
+            'metadata': {
+                'width': 100,
+                'height': 100,
+                'format': 'jpg',
+                'thumbnailUrl': 'https://example.com/second-thumb.jpg',
+            },
+            'generationSource': 'upload',
+        },
+    )
+    assert second_item_response.status_code == 201
+
+    response = client.get(f'/api/v1/collections/{collection_id}')
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['thumbnailUrl'] is None
 
 
 def test_create_collection_with_unknown_parent_returns_400(
@@ -353,6 +427,44 @@ def test_get_collection_items_returns_child_collections(
     assert child_response.status_code == 201
     child_payload = child_response.json()
 
+    first_child_item_response = client.post(
+        f'/api/v1/collections/{child_payload["id"]}/items',
+        json={
+            'projectId': str(ids['project_id']),
+            'mediaType': 'image',
+            'name': 'Nested Child Item First',
+            'description': 'First child item has empty thumbnail',
+            'url': 'https://example.com/child-item.jpg',
+            'metadata': {
+                'width': 100,
+                'height': 100,
+                'format': 'jpg',
+                'thumbnailUrl': '',
+            },
+            'generationSource': 'upload',
+        },
+    )
+    assert first_child_item_response.status_code == 201
+
+    second_child_item_response = client.post(
+        f'/api/v1/collections/{child_payload["id"]}/items',
+        json={
+            'projectId': str(ids['project_id']),
+            'mediaType': 'image',
+            'name': 'Nested Child Item Second',
+            'description': 'Second child item has thumbnail',
+            'url': 'https://example.com/child-item-2.jpg',
+            'metadata': {
+                'width': 100,
+                'height': 100,
+                'format': 'jpg',
+                'thumbnailUrl': 'https://example.com/child-thumb.jpg',
+            },
+            'generationSource': 'upload',
+        },
+    )
+    assert second_child_item_response.status_code == 201
+
     response = client.get(f'/api/v1/collections/{ids["collection_id"]}/items')
     assert response.status_code == 200
     payload = response.json()
@@ -360,6 +472,66 @@ def test_get_collection_items_returns_child_collections(
     assert len(payload['childCollections']) == 1
     assert payload['childCollections'][0]['id'] == child_payload['id']
     assert payload['childCollections'][0]['parentCollectionId'] == str(ids['collection_id'])
+    assert payload['childCollections'][0]['thumbnailUrl'] is None
+
+
+def test_get_project_collections_thumbnail_uses_first_item_only(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+
+    collection_response = client.post(
+        f'/api/v1/projects/{ids["project_id"]}/collections',
+        json={
+            'name': 'Project List Thumbnail Collection',
+            'tag': 'folder',
+            'description': 'For first-item thumbnail semantics',
+        },
+    )
+    assert collection_response.status_code == 201
+    collection_id = collection_response.json()['id']
+
+    first_item_response = client.post(
+        f'/api/v1/collections/{collection_id}/items',
+        json={
+            'projectId': str(ids['project_id']),
+            'mediaType': 'image',
+            'name': 'First no-thumb',
+            'description': 'First item missing thumbnail',
+            'url': 'https://example.com/first.jpg',
+            'metadata': {'width': 100, 'height': 100, 'format': 'jpg', 'thumbnailUrl': ''},
+            'generationSource': 'upload',
+        },
+    )
+    assert first_item_response.status_code == 201
+
+    second_item_response = client.post(
+        f'/api/v1/collections/{collection_id}/items',
+        json={
+            'projectId': str(ids['project_id']),
+            'mediaType': 'image',
+            'name': 'Second with thumb',
+            'description': 'Second item has thumbnail',
+            'url': 'https://example.com/second.jpg',
+            'metadata': {
+                'width': 100,
+                'height': 100,
+                'format': 'jpg',
+                'thumbnailUrl': 'https://example.com/second-thumb.jpg',
+            },
+            'generationSource': 'upload',
+        },
+    )
+    assert second_item_response.status_code == 201
+
+    list_response = client.get(f'/api/v1/projects/{ids["project_id"]}/collections')
+    assert list_response.status_code == 200
+    payload = list_response.json()
+    target_collection = next(
+        collection for collection in payload if collection['id'] == collection_id
+    )
+    assert target_collection['thumbnailUrl'] is None
 
 
 def test_get_collection_items_returns_seeded_items(client: TestClient, db_session: Session) -> None:

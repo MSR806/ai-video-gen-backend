@@ -74,7 +74,10 @@ def get_collection(
     collection = use_case.execute(collection_id)
     if collection is None:
         raise ApiError(status_code=404, code='collection_not_found', message='Collection not found')
-    return CollectionResponse.from_domain(collection)
+
+    item_repository = CollectionItemSqlRepository(session)
+    thumbnail_url = item_repository.get_first_item_thumbnail_url_by_collection_id(collection.id)
+    return CollectionResponse.from_domain(collection, thumbnail_url=thumbnail_url)
 
 
 @router.get('/collections/{collection_id}/items', response_model=CollectionContentsResponse)
@@ -88,14 +91,22 @@ def get_collection_items(
 
     items_use_case = GetCollectionItemsUseCase(CollectionItemSqlRepository(session))
     child_collections_use_case = GetChildCollectionsUseCase(CollectionSqlRepository(session))
+    child_collections = child_collections_use_case.execute(collection_id)
+    item_repository = CollectionItemSqlRepository(session)
+    child_thumbnail_urls = item_repository.get_first_item_thumbnail_urls_by_collection_ids(
+        [collection.id for collection in child_collections]
+    )
     return CollectionContentsResponse(
         items=[
             CollectionItemReadResponse.from_domain(item)
             for item in items_use_case.execute(collection_id)
         ],
         child_collections=[
-            CollectionResponse.from_domain(collection)
-            for collection in child_collections_use_case.execute(collection_id)
+            CollectionResponse.from_domain(
+                collection,
+                thumbnail_url=child_thumbnail_urls.get(collection.id),
+            )
+            for collection in child_collections
         ],
     )
 

@@ -44,7 +44,12 @@ def seed_baseline_data(session: Session) -> dict[str, UUID]:
             name='Seed Item',
             description='Seed item for tests',
             url='https://example.com/seed.jpg',
-            metadata_json={'width': 1920, 'height': 1080, 'format': 'jpg'},
+            metadata_json={
+                'width': 1920,
+                'height': 1080,
+                'format': 'jpg',
+                'thumbnailUrl': 'https://example.com/seed-item-thumb.jpg',
+            },
             generation_source='upload',
         )
     )
