@@ -24,9 +24,18 @@ from ai_video_gen_backend.infrastructure.providers.screenplay_chat_tools import 
 
 
 class _FakeScreenplayRepository:
-    def __init__(self, *, screenplay: Screenplay, raise_internal: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        screenplay: Screenplay,
+        raise_internal: bool = False,
+        update_returns_scene: bool = False,
+        delete_returns_screenplay: bool = False,
+    ) -> None:
         self._screenplay = screenplay
         self._raise_internal = raise_internal
+        self._update_returns_scene = update_returns_scene
+        self._delete_returns_screenplay = delete_returns_screenplay
         self.create_scene_calls = 0
 
     def get_screenplay_by_project_id(self, project_id: UUID) -> Screenplay | None:
@@ -59,11 +68,15 @@ class _FakeScreenplayRepository:
         scene_id: UUID,
         payload: ScreenplaySceneUpdateInput,
     ) -> ScreenplayScene | None:
-        del screenplay_id, scene_id, payload
-        return None
+        del screenplay_id, payload
+        if not self._update_returns_scene:
+            return None
+        return next((scene for scene in self._screenplay.scenes if scene.id == scene_id), None)
 
     def delete_screenplay_scene(self, screenplay_id: UUID, scene_id: UUID) -> Screenplay | None:
         del screenplay_id, scene_id
+        if self._delete_returns_screenplay:
+            return self._screenplay
         return None
 
     def reorder_screenplay_scenes(
@@ -96,12 +109,12 @@ def _build_screenplay() -> Screenplay:
     )
 
 
-def _create_scene_tool(tools: list[object]) -> object:
+def _tool_by_name(tools: list[object], name: str) -> object:
     for tool in tools:
-        name = getattr(tool, 'name', None)
-        if name == 'create_scene':
+        tool_name = getattr(tool, 'name', None)
+        if tool_name == name:
             return tool
-    msg = 'create_scene tool not found'
+    msg = f'{name} tool not found'
     raise AssertionError(msg)
 
 
@@ -123,7 +136,7 @@ def test_create_scene_tool_respects_stream_cancellation() -> None:
         mutation_tracker=ScreenplayMutationTracker(),
         is_cancelled=lambda: True,
     )
-    create_tool = cast(_InvokableTool, _create_scene_tool(tools))
+    create_tool = cast(_InvokableTool, _tool_by_name(tools, 'create_scene'))
 
     with pytest.raises(ChatStreamCancelledError):
         create_tool.invoke({'content': '<scene><slugline>INT. LAB - NIGHT</slugline></scene>'})
@@ -145,7 +158,68 @@ def test_create_scene_tool_sanitizes_internal_exception_message() -> None:
         mutation_tracker=ScreenplayMutationTracker(),
         is_cancelled=lambda: False,
     )
-    create_tool = cast(_InvokableTool, _create_scene_tool(tools))
+    create_tool = cast(_InvokableTool, _tool_by_name(tools, 'create_scene'))
 
     with pytest.raises(RuntimeError, match='db internals leaked'):
         create_tool.invoke({'content': '<scene><slugline>INT. LAB - NIGHT</slugline></scene>'})
+
+
+def test_get_scene_tool_returns_active_scene_when_no_id_is_passed() -> None:
+    screenplay = _build_screenplay()
+    repository = _FakeScreenplayRepository(screenplay=screenplay)
+    active_scene = screenplay.scenes[0]
+
+    tools = build_screenplay_tools(
+        screenplay_repository=repository,
+        screenplay_context=ScreenplayChatContext(
+            project_id=screenplay.project_id,
+            screenplay_id=screenplay.id,
+            active_scene_id=active_scene.id,
+        ),
+        mutation_tracker=ScreenplayMutationTracker(),
+        is_cancelled=lambda: False,
+    )
+    get_scene_tool = cast(_InvokableTool, _tool_by_name(tools, 'get_scene'))
+
+    result = get_scene_tool.invoke({})
+
+    assert result['status'] == 'ok'
+    assert result['sceneId'] == str(active_scene.id)
+    assert result['content'] == active_scene.content
+
+
+def test_update_and_delete_tools_report_not_found_without_mutation() -> None:
+    screenplay = _build_screenplay()
+    repository = _FakeScreenplayRepository(screenplay=screenplay)
+    tracker = ScreenplayMutationTracker()
+
+    tools = build_screenplay_tools(
+        screenplay_repository=repository,
+        screenplay_context=ScreenplayChatContext(
+            project_id=screenplay.project_id,
+            screenplay_id=screenplay.id,
+            active_scene_id=None,
+        ),
+        mutation_tracker=tracker,
+        is_cancelled=lambda: False,
+    )
+
+    update_scene_tool = cast(_InvokableTool, _tool_by_name(tools, 'update_scene'))
+    delete_scene_tool = cast(_InvokableTool, _tool_by_name(tools, 'delete_scene'))
+
+    update_result = update_scene_tool.invoke(
+        {'id': str(screenplay.scenes[0].id), 'content': '<scene><action>Updated</action></scene>'}
+    )
+    delete_result = delete_scene_tool.invoke({'id': str(screenplay.scenes[0].id)})
+
+    assert update_result == {
+        'status': 'error',
+        'code': 'scene_not_found',
+        'message': 'Unable to update scene that does not exist',
+    }
+    assert delete_result == {
+        'status': 'error',
+        'code': 'scene_not_found',
+        'message': 'Unable to delete scene that does not exist',
+    }
+    assert tracker.did_mutate is False
