@@ -3,7 +3,15 @@ from __future__ import annotations
 from typing import Protocol
 from uuid import UUID
 
-from .entities import ChatInputMessage, ChatMessage, ChatRole, ChatThread
+from .entities import (
+    ChatAgentType,
+    ChatInputMessage,
+    ChatMessage,
+    ChatRole,
+    ChatThread,
+    ChatWorkflowResult,
+    ScreenplayChatContext,
+)
 
 
 class ChatRepositoryPort(Protocol):
@@ -26,6 +34,15 @@ class ChatRepositoryPort(Protocol):
 class ChatModelPort(Protocol):
     def generate_reply(self, *, messages: list[ChatMessage]) -> str: ...
 
+    def as_langchain_chat_model(self) -> object: ...
+
 
 class ChatWorkflowPort(Protocol):
-    def run(self, *, thread_id: UUID, latest_user_message: ChatInputMessage) -> ChatMessage: ...
+    def run(
+        self,
+        *,
+        thread_id: UUID,
+        latest_user_message: ChatInputMessage,
+        agent_type: ChatAgentType,
+        screenplay_context: ScreenplayChatContext | None,
+    ) -> ChatWorkflowResult: ...

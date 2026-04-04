@@ -17,6 +17,9 @@ from ai_video_gen_backend.infrastructure.db.session import (
     get_session_factory,
 )
 from ai_video_gen_backend.main import create_app
+from ai_video_gen_backend.presentation.api.dependencies import (
+    get_screenplay_langgraph_checkpointer,
+)
 
 
 @pytest.fixture
@@ -42,7 +45,9 @@ def initialized_engine(test_settings: Settings) -> Engine:
 @pytest.fixture
 def app(test_settings: Settings, initialized_engine: Engine) -> FastAPI:
     del initialized_engine
-    return create_app(test_settings)
+    fastapi_app = create_app(test_settings)
+    fastapi_app.dependency_overrides[get_screenplay_langgraph_checkpointer] = lambda: object()
+    return fastapi_app
 
 
 @pytest.fixture

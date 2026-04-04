@@ -4,11 +4,10 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
-from sqlalchemy import DateTime, Integer, Uuid, func
+from sqlalchemy import DateTime, Integer, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ai_video_gen_backend.infrastructure.db.base import Base
-from ai_video_gen_backend.infrastructure.db.types import JSONType
 
 
 class ScreenplaySceneModel(Base):
@@ -30,7 +29,7 @@ class ScreenplaySceneModel(Base):
         nullable=False,
     )
     order_index: Mapped[int] = mapped_column(Integer, nullable=False)
-    content_json: Mapped[list[object]] = mapped_column('content_json', JSONType, nullable=False)
+    content_xml: Mapped[str] = mapped_column('content_xml', Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

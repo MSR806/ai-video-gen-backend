@@ -47,6 +47,9 @@ class OpenAIChatModelProvider:
         response = self._model.invoke(lc_messages)
         return _extract_text(response.content)
 
+    def as_langchain_chat_model(self) -> object:
+        return self._model
+
 
 def _to_langchain_message(message: ChatMessage) -> BaseMessage:
     if message.role == 'assistant':

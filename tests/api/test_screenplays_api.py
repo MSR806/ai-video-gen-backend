@@ -6,11 +6,13 @@ from sqlalchemy.orm import Session
 from tests.support import seed_baseline_data
 
 
-def _scene_blocks(prefix: str) -> list[dict[str, str]]:
-    return [
-        {'id': f'{prefix}-1', 'type': 'slugline', 'text': 'INT. APARTMENT - DAY'},
-        {'id': f'{prefix}-2', 'type': 'action', 'text': 'Alex stares out the window.'},
-    ]
+def _scene_xml(prefix: str) -> str:
+    return (
+        '<scene>'
+        f'<slugline>INT. APARTMENT {prefix.upper()} - DAY</slugline>'
+        '<action>Alex stares out the window.</action>'
+        '</scene>'
+    )
 
 
 def test_screenplay_endpoints_happy_path(client: TestClient, db_session: Session) -> None:
@@ -33,7 +35,7 @@ def test_screenplay_endpoints_happy_path(client: TestClient, db_session: Session
 
     add_first_scene = client.post(
         f'/api/v1/projects/{project_id}/screenplays/scenes',
-        json={'content': _scene_blocks('a')},
+        json={'content': _scene_xml('a')},
     )
     assert add_first_scene.status_code == 201
     first_scene_payload = add_first_scene.json()
@@ -41,7 +43,7 @@ def test_screenplay_endpoints_happy_path(client: TestClient, db_session: Session
 
     add_second_scene = client.post(
         f'/api/v1/projects/{project_id}/screenplays/scenes',
-        json={'content': _scene_blocks('b')},
+        json={'content': _scene_xml('b')},
     )
     assert add_second_scene.status_code == 201
     second_scene_payload = add_second_scene.json()
@@ -58,11 +60,11 @@ def test_screenplay_endpoints_happy_path(client: TestClient, db_session: Session
 
     update_scene_response = client.patch(
         f'/api/v1/projects/{project_id}/screenplays/scenes/{scene_ids[1]}',
-        json={'content': _scene_blocks('b-updated')},
+        json={'content': _scene_xml('b-updated')},
     )
     assert update_scene_response.status_code == 200
     updated_scene_payload = update_scene_response.json()
-    assert updated_scene_payload['content'][0]['id'] == 'b-updated-1'
+    assert '<slugline>INT. APARTMENT B-UPDATED - DAY</slugline>' in updated_scene_payload['content']
 
     update_title_response = client.patch(
         f'/api/v1/projects/{project_id}/screenplays',
@@ -80,10 +82,7 @@ def test_screenplay_endpoints_happy_path(client: TestClient, db_session: Session
     assert delete_scene_payload['scenes'][0]['orderIndex'] == 1
 
 
-def test_screenplay_scene_rejects_duplicate_block_ids(
-    client: TestClient,
-    db_session: Session,
-) -> None:
+def test_screenplay_scene_rejects_malformed_xml(client: TestClient, db_session: Session) -> None:
     ids = seed_baseline_data(db_session)
     project_id = ids['project_id']
 
@@ -94,20 +93,14 @@ def test_screenplay_scene_rejects_duplicate_block_ids(
 
     response = client.post(
         f'/api/v1/projects/{project_id}/screenplays/scenes',
-        json={
-            'content': [
-                {'id': 'dup', 'type': 'action', 'text': 'First'},
-                {'id': 'dup', 'type': 'dialogue', 'text': 'Second'},
-            ]
-        },
+        json={'content': '<scene><action>Unclosed</scene>'},
     )
 
     assert response.status_code == 422
 
 
-def test_screenplay_scene_rejects_invalid_block_type(
-    client: TestClient,
-    db_session: Session,
+def test_screenplay_scene_rejects_invalid_scene_root(
+    client: TestClient, db_session: Session
 ) -> None:
     ids = seed_baseline_data(db_session)
     project_id = ids['project_id']
@@ -119,11 +112,26 @@ def test_screenplay_scene_rejects_invalid_block_type(
 
     response = client.post(
         f'/api/v1/projects/{project_id}/screenplays/scenes',
-        json={
-            'content': [
-                {'id': 'x-1', 'type': 'unknown', 'text': 'Invalid block type'},
-            ]
-        },
+        json={'content': '<not-scene><action>Invalid root</action></not-scene>'},
+    )
+
+    assert response.status_code == 422
+
+
+def test_screenplay_scene_rejects_invalid_block_tag(
+    client: TestClient, db_session: Session
+) -> None:
+    ids = seed_baseline_data(db_session)
+    project_id = ids['project_id']
+
+    client.post(
+        f'/api/v1/projects/{project_id}/screenplays',
+        json={'title': 'My Screenplay'},
+    )
+
+    response = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes',
+        json={'content': '<scene><unknown>Invalid block</unknown></scene>'},
     )
 
     assert response.status_code == 422

@@ -1,42 +1,28 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
 from uuid import UUID
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from ai_video_gen_backend.domain.screenplay import (
+    SceneXmlValidationError,
     Screenplay,
     ScreenplayCreateInput,
     ScreenplayReorderScenesInput,
     ScreenplayScene,
     ScreenplaySceneCreateInput,
     ScreenplaySceneUpdateInput,
+    canonicalize_scene_xml,
 )
 from ai_video_gen_backend.presentation.api.v1.schemas.base import StrictSchema
-
-ScreenplayBlockTypeSchema = Literal[
-    'slugline',
-    'action',
-    'character',
-    'parenthetical',
-    'dialogue',
-    'transition',
-]
-
-
-class ScreenplayBlockSchema(StrictSchema):
-    id: str = Field(min_length=1)
-    type: ScreenplayBlockTypeSchema
-    text: str
 
 
 class ScreenplaySceneResponse(StrictSchema):
     id: UUID
     screenplay_id: UUID = Field(alias='screenplayId')
     order_index: int = Field(alias='orderIndex')
-    content: list[ScreenplayBlockSchema]
+    content: str
     created_at: datetime | None = Field(default=None, alias='createdAt')
     updated_at: datetime | None = Field(default=None, alias='updatedAt')
 
@@ -46,7 +32,7 @@ class ScreenplaySceneResponse(StrictSchema):
             id=scene.id,
             screenplay_id=scene.screenplay_id,
             order_index=scene.order_index,
-            content=[ScreenplayBlockSchema.model_validate(block) for block in scene.content],
+            content=scene.content,
             created_at=scene.created_at,
             updated_at=scene.updated_at,
         )
@@ -93,40 +79,35 @@ class UpdateScreenplayRequest(StrictSchema):
         return self
 
 
-def _validate_unique_block_ids(content: list[ScreenplayBlockSchema]) -> None:
-    seen_ids: set[str] = set()
-    for block in content:
-        if block.id in seen_ids:
-            raise ValueError('content block ids must be unique within a scene payload')
-        seen_ids.add(block.id)
-
-
 class CreateScreenplaySceneRequest(StrictSchema):
     position: int | None = None
-    content: list[ScreenplayBlockSchema]
+    content: str
 
-    @model_validator(mode='after')
-    def validate_content(self) -> CreateScreenplaySceneRequest:
-        _validate_unique_block_ids(self.content)
-        return self
+    @field_validator('content')
+    @classmethod
+    def validate_content(cls, value: str) -> str:
+        try:
+            return canonicalize_scene_xml(value)
+        except SceneXmlValidationError as exc:
+            raise ValueError(str(exc)) from exc
 
     def to_domain(self) -> ScreenplaySceneCreateInput:
-        return ScreenplaySceneCreateInput(
-            position=self.position,
-            content=[block.model_dump() for block in self.content],
-        )
+        return ScreenplaySceneCreateInput(position=self.position, content=self.content)
 
 
 class UpdateScreenplaySceneRequest(StrictSchema):
-    content: list[ScreenplayBlockSchema]
+    content: str
 
-    @model_validator(mode='after')
-    def validate_content(self) -> UpdateScreenplaySceneRequest:
-        _validate_unique_block_ids(self.content)
-        return self
+    @field_validator('content')
+    @classmethod
+    def validate_content(cls, value: str) -> str:
+        try:
+            return canonicalize_scene_xml(value)
+        except SceneXmlValidationError as exc:
+            raise ValueError(str(exc)) from exc
 
     def to_domain(self) -> ScreenplaySceneUpdateInput:
-        return ScreenplaySceneUpdateInput(content=[block.model_dump() for block in self.content])
+        return ScreenplaySceneUpdateInput(content=self.content)
 
 
 class ReorderScreenplayScenesRequest(StrictSchema):

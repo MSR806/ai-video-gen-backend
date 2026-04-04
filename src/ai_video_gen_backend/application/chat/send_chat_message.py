@@ -3,9 +3,11 @@ from __future__ import annotations
 from uuid import UUID
 
 from ai_video_gen_backend.domain.chat import (
+    ChatAgentType,
     ChatInputMessage,
     ChatRepositoryPort,
     ChatWorkflowPort,
+    ScreenplayChatContext,
     SendChatResult,
 )
 
@@ -16,6 +18,14 @@ class ChatThreadNotFoundError(Exception):
 
 class InvalidChatMessagesError(Exception):
     """Raised when request messages do not contain any user message."""
+
+
+class InvalidScreenplayChatContextError(Exception):
+    """Raised when screenplay assistant context is missing required fields."""
+
+
+class ScreenplayAssistantRequiresStreamingError(Exception):
+    """Raised when screenplay assistant is called on sync chat path."""
 
 
 class SendChatMessageUseCase:
@@ -32,8 +42,13 @@ class SendChatMessageUseCase:
         *,
         thread_id: UUID | None,
         messages: list[ChatInputMessage],
+        agent_type: ChatAgentType,
+        screenplay_context: ScreenplayChatContext | None,
     ) -> SendChatResult:
         latest_user_message = _latest_user_message(messages)
+
+        if agent_type == 'screenplay_assistant':
+            raise ScreenplayAssistantRequiresStreamingError
 
         thread = (
             self._chat_repository.create_thread()
@@ -43,12 +58,19 @@ class SendChatMessageUseCase:
         if thread is None:
             raise ChatThreadNotFoundError
 
-        assistant_message = self._chat_workflow.run(
+        workflow_result = self._chat_workflow.run(
             thread_id=thread.id,
             latest_user_message=latest_user_message,
+            agent_type=agent_type,
+            screenplay_context=screenplay_context,
         )
 
-        return SendChatResult(thread_id=thread.id, assistant_message=assistant_message)
+        return SendChatResult(
+            thread_id=thread.id,
+            assistant_message=workflow_result.assistant_message,
+            did_mutate=workflow_result.did_mutate,
+            updated_screenplay=workflow_result.updated_screenplay,
+        )
 
 
 def _latest_user_message(messages: list[ChatInputMessage]) -> ChatInputMessage:

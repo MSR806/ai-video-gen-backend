@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select, update
@@ -12,6 +11,7 @@ from ai_video_gen_backend.domain.screenplay import (
     ScreenplayScene,
     ScreenplaySceneCreateInput,
     ScreenplaySceneUpdateInput,
+    canonicalize_scene_xml,
 )
 from ai_video_gen_backend.infrastructure.db.models import ScreenplayModel, ScreenplaySceneModel
 
@@ -84,7 +84,7 @@ class ScreenplaySqlRepository:
                     id=uuid4(),
                     screenplay_id=screenplay_id,
                     order_index=insert_position,
-                    content_json=self._normalize_content(payload.content),
+                    content_xml=self._normalize_content(payload.content),
                 )
             )
             self._session.commit()
@@ -108,7 +108,7 @@ class ScreenplaySqlRepository:
             if model is None:
                 return None
 
-            model.content_json = self._normalize_content(payload.content)
+            model.content_xml = self._normalize_content(payload.content)
             self._session.commit()
             self._session.refresh(model)
             return self._to_scene_domain(model)
@@ -242,8 +242,8 @@ class ScreenplaySqlRepository:
             .values(order_index=ScreenplaySceneModel.order_index - self._scene_order_shift - 1)
         )
 
-    def _normalize_content(self, content: list[object]) -> list[object]:
-        return deepcopy(content)
+    def _normalize_content(self, content: str) -> str:
+        return canonicalize_scene_xml(content)
 
     def _get_screenplay_by_id(self, screenplay_id: UUID) -> Screenplay:
         stmt = (
@@ -270,7 +270,7 @@ class ScreenplaySqlRepository:
             id=model.id,
             screenplay_id=model.screenplay_id,
             order_index=model.order_index,
-            content=self._normalize_content(model.content_json),
+            content=self._normalize_content(model.content_xml),
             created_at=model.created_at,
             updated_at=model.updated_at,
         )

@@ -1,4 +1,4 @@
-from .chat_schema import ChatRequest, ChatResponse
+from .chat_schema import ChatRequest, ChatResponse, ChatStreamRequest
 from .collection_item_schema import (
     CollectionItemReadResponse,
     CollectionItemResponse,
@@ -34,6 +34,7 @@ from .screenplay_schema import (
 __all__ = [
     'ChatRequest',
     'ChatResponse',
+    'ChatStreamRequest',
     'CollectionContentsResponse',
     'CollectionItemReadResponse',
     'CollectionItemResponse',

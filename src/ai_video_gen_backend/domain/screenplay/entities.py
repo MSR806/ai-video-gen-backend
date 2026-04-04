@@ -2,26 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal
 from uuid import UUID
-
-from ai_video_gen_backend.domain.types import JsonValue
-
-ScreenplayBlockType = Literal[
-    'slugline',
-    'action',
-    'character',
-    'parenthetical',
-    'dialogue',
-    'transition',
-]
-
-
-@dataclass(frozen=True, slots=True)
-class ScreenplayBlock:
-    id: str
-    type: ScreenplayBlockType
-    text: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,7 +10,7 @@ class ScreenplayScene:
     id: UUID
     screenplay_id: UUID
     order_index: int
-    content: list[JsonValue]
+    content: str
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -52,12 +33,12 @@ class ScreenplayCreateInput:
 @dataclass(frozen=True, slots=True)
 class ScreenplaySceneCreateInput:
     position: int | None
-    content: list[JsonValue]
+    content: str
 
 
 @dataclass(frozen=True, slots=True)
 class ScreenplaySceneUpdateInput:
-    content: list[JsonValue]
+    content: str
 
 
 @dataclass(frozen=True, slots=True)

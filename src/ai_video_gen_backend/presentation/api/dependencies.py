@@ -30,7 +30,14 @@ from ai_video_gen_backend.infrastructure.providers.fal import (
     FalGenerationModelRegistry,
     ModelRegistryLoader,
 )
-from ai_video_gen_backend.infrastructure.repositories import ChatSqlRepository
+from ai_video_gen_backend.infrastructure.providers.langgraph_postgres_checkpointer import (
+    close_langgraph_postgres_checkpointer,
+    get_langgraph_postgres_checkpointer,
+)
+from ai_video_gen_backend.infrastructure.repositories import (
+    ChatSqlRepository,
+    ScreenplaySqlRepository,
+)
 from ai_video_gen_backend.infrastructure.storage import (
     FfmpegVideoThumbnailGenerator,
     S3ObjectStorage,
@@ -109,6 +116,12 @@ def get_chat_model_provider(
     )
 
 
+async def get_screenplay_langgraph_checkpointer(
+    settings: Settings = Depends(get_app_settings),
+) -> object:
+    return await get_langgraph_postgres_checkpointer(database_url=settings.database_url)
+
+
 def get_chat_workflow(
     session: Session = Depends(get_db_session),
     chat_model_provider: ChatModelPort = Depends(get_chat_model_provider),
@@ -117,6 +130,7 @@ def get_chat_workflow(
     return LangGraphChatWorkflow(
         chat_repository=chat_repository,
         chat_model=chat_model_provider,
+        screenplay_repository=ScreenplaySqlRepository(session),
     )
 
 
@@ -126,3 +140,7 @@ def get_send_chat_message_use_case(
 ) -> SendChatMessageUseCase:
     chat_repository = ChatSqlRepository(session)
     return SendChatMessageUseCase(chat_repository=chat_repository, chat_workflow=chat_workflow)
+
+
+async def shutdown_screenplay_langgraph_checkpointer() -> None:
+    await close_langgraph_postgres_checkpointer()

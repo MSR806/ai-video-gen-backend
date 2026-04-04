@@ -8,6 +8,7 @@ import pytest
 from ai_video_gen_backend.application.chat import (
     ChatThreadNotFoundError,
     InvalidChatMessagesError,
+    ScreenplayAssistantRequiresStreamingError,
     SendChatMessageUseCase,
 )
 from ai_video_gen_backend.domain.chat import (
@@ -16,6 +17,13 @@ from ai_video_gen_backend.domain.chat import (
     ChatMessage,
     ChatRole,
     ChatThread,
+)
+from ai_video_gen_backend.domain.screenplay import (
+    Screenplay,
+    ScreenplayCreateInput,
+    ScreenplayScene,
+    ScreenplaySceneCreateInput,
+    ScreenplaySceneUpdateInput,
 )
 from ai_video_gen_backend.infrastructure.providers import LangGraphChatWorkflow
 
@@ -65,10 +73,59 @@ class FakeChatModel:
         image_count = len(latest.images)
         return f'Received: {latest.text} ({image_count} images)'
 
+    def as_langchain_chat_model(self) -> object:
+        return object()
+
+
+class FakeScreenplayRepository:
+    def get_screenplay_by_project_id(self, project_id: UUID) -> Screenplay | None:
+        del project_id
+        return None
+
+    def create_screenplay(self, project_id: UUID, payload: ScreenplayCreateInput) -> Screenplay:
+        del project_id, payload
+        raise NotImplementedError
+
+    def update_screenplay_title(self, screenplay_id: UUID, title: str) -> Screenplay | None:
+        del screenplay_id, title
+        return None
+
+    def create_screenplay_scene(
+        self,
+        screenplay_id: UUID,
+        payload: ScreenplaySceneCreateInput,
+    ) -> Screenplay | None:
+        del screenplay_id, payload
+        return None
+
+    def update_screenplay_scene(
+        self,
+        screenplay_id: UUID,
+        scene_id: UUID,
+        payload: ScreenplaySceneUpdateInput,
+    ) -> ScreenplayScene | None:
+        del screenplay_id, scene_id, payload
+        return None
+
+    def delete_screenplay_scene(self, screenplay_id: UUID, scene_id: UUID) -> Screenplay | None:
+        del screenplay_id, scene_id
+        return None
+
+    def reorder_screenplay_scenes(
+        self, screenplay_id: UUID, scene_ids: list[UUID]
+    ) -> Screenplay | None:
+        del screenplay_id, scene_ids
+        return None
+
 
 def test_send_chat_message_use_case_runs_graph_and_persists_messages() -> None:
     repository = FakeChatRepository()
-    workflow = LangGraphChatWorkflow(chat_repository=repository, chat_model=FakeChatModel())
+    workflow = LangGraphChatWorkflow(
+        chat_repository=repository,
+        chat_model=FakeChatModel(),
+        screenplay_repository=FakeScreenplayRepository(),
+        screenplay_checkpointer=object(),
+    )
     use_case = SendChatMessageUseCase(chat_repository=repository, chat_workflow=workflow)
 
     result = use_case.execute(
@@ -80,6 +137,8 @@ def test_send_chat_message_use_case_runs_graph_and_persists_messages() -> None:
                 images=[ChatImageInput(url='https://example.com/a.png')],
             )
         ],
+        agent_type='default',
+        screenplay_context=None,
     )
 
     thread_messages = repository.list_messages(result.thread_id)
@@ -93,23 +152,56 @@ def test_send_chat_message_use_case_runs_graph_and_persists_messages() -> None:
 
 def test_send_chat_message_use_case_raises_when_thread_missing() -> None:
     repository = FakeChatRepository()
-    workflow = LangGraphChatWorkflow(chat_repository=repository, chat_model=FakeChatModel())
+    workflow = LangGraphChatWorkflow(
+        chat_repository=repository,
+        chat_model=FakeChatModel(),
+        screenplay_repository=FakeScreenplayRepository(),
+        screenplay_checkpointer=object(),
+    )
     use_case = SendChatMessageUseCase(chat_repository=repository, chat_workflow=workflow)
 
     with pytest.raises(ChatThreadNotFoundError):
         use_case.execute(
             thread_id=uuid4(),
             messages=[ChatInputMessage(role='user', text='Hi', images=[])],
+            agent_type='default',
+            screenplay_context=None,
         )
 
 
 def test_send_chat_message_use_case_raises_without_user_message() -> None:
     repository = FakeChatRepository()
-    workflow = LangGraphChatWorkflow(chat_repository=repository, chat_model=FakeChatModel())
+    workflow = LangGraphChatWorkflow(
+        chat_repository=repository,
+        chat_model=FakeChatModel(),
+        screenplay_repository=FakeScreenplayRepository(),
+        screenplay_checkpointer=object(),
+    )
     use_case = SendChatMessageUseCase(chat_repository=repository, chat_workflow=workflow)
 
     with pytest.raises(InvalidChatMessagesError):
         use_case.execute(
             thread_id=None,
             messages=[ChatInputMessage(role='assistant', text='I can help', images=[])],
+            agent_type='default',
+            screenplay_context=None,
+        )
+
+
+def test_send_chat_message_use_case_rejects_screenplay_assistant_on_sync_path() -> None:
+    repository = FakeChatRepository()
+    workflow = LangGraphChatWorkflow(
+        chat_repository=repository,
+        chat_model=FakeChatModel(),
+        screenplay_repository=FakeScreenplayRepository(),
+        screenplay_checkpointer=object(),
+    )
+    use_case = SendChatMessageUseCase(chat_repository=repository, chat_workflow=workflow)
+
+    with pytest.raises(ScreenplayAssistantRequiresStreamingError):
+        use_case.execute(
+            thread_id=None,
+            messages=[ChatInputMessage(role='user', text='Draft a scene', images=[])],
+            agent_type='screenplay_assistant',
+            screenplay_context=None,
         )
