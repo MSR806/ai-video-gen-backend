@@ -21,11 +21,14 @@ from .generation_submit_schema import (
     GenerationRunSubmitResponse,
 )
 from .project_schema import CreateProjectRequest, ProjectResponse
-from .scene_schema import (
-    CreateSceneRequest,
-    SceneResponse,
-    SceneSyncResponse,
-    SceneUpdateRequest,
+from .screenplay_schema import (
+    CreateScreenplayRequest,
+    CreateScreenplaySceneRequest,
+    ReorderScreenplayScenesRequest,
+    ScreenplayResponse,
+    ScreenplaySceneResponse,
+    UpdateScreenplayRequest,
+    UpdateScreenplaySceneRequest,
 )
 
 __all__ = [
@@ -38,16 +41,19 @@ __all__ = [
     'CreateCollectionItemRequest',
     'CreateCollectionRequest',
     'CreateProjectRequest',
-    'CreateSceneRequest',
+    'CreateScreenplayRequest',
+    'CreateScreenplaySceneRequest',
     'ErrorEnvelope',
     'GenerationCapabilitiesResponse',
     'GenerationRunResponse',
     'GenerationRunSubmitRequest',
     'GenerationRunSubmitResponse',
     'ProjectResponse',
-    'SceneResponse',
-    'SceneSyncResponse',
-    'SceneUpdateRequest',
+    'ReorderScreenplayScenesRequest',
+    'ScreenplayResponse',
+    'ScreenplaySceneResponse',
     'SetCollectionItemFavoriteRequest',
+    'UpdateScreenplayRequest',
+    'UpdateScreenplaySceneRequest',
     'resolve_collection_thumbnail_url',
 ]

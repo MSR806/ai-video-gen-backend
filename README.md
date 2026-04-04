@@ -67,7 +67,7 @@ uv run --with coverage coverage report -m
 Conventional Commits are enforced via `gitlint` as a `commit-msg` hook.
 
 Valid examples:
-- `feat(scene): add screenplay sync endpoint`
+- `feat(screenplay): add screenplay sync endpoint`
 - `fix: handle empty upload payload`
 
 ## API
@@ -85,10 +85,13 @@ Base path: `/api/v1`
 - `GET /api/v1/generation-jobs/{job_id}`
 - `POST /api/v1/provider-webhooks/fal`
 - `DELETE /api/v1/collections/{collection_id}/items/{item_id}`
-- `GET /api/v1/projects/{project_id}/scenes`
-- `POST /api/v1/projects/{project_id}/scenes`
-- `PATCH /api/v1/projects/{project_id}/scenes/{scene_id}`
-- `DELETE /api/v1/projects/{project_id}/scenes/{scene_id}`
+- `GET /api/v1/projects/{project_id}/screenplays`
+- `POST /api/v1/projects/{project_id}/screenplays`
+- `PATCH /api/v1/projects/{project_id}/screenplays`
+- `POST /api/v1/projects/{project_id}/screenplays/scenes`
+- `PATCH /api/v1/projects/{project_id}/screenplays/scenes/{scene_id}`
+- `DELETE /api/v1/projects/{project_id}/screenplays/scenes/{scene_id}`
+- `POST /api/v1/projects/{project_id}/screenplays/scenes/reorder`
 - `GET /health/live`
 - `GET /health/ready`
 

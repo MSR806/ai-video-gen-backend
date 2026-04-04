@@ -4,7 +4,7 @@ from .generation_capabilities_router import router as generation_capabilities_ro
 from .generation_router import router as generation_router
 from .project_router import router as project_router
 from .provider_webhook_router import router as provider_webhook_router
-from .scene_router import router as scene_router
+from .screenplay_router import router as screenplay_router
 
 __all__ = [
     'chat_router',
@@ -13,5 +13,5 @@ __all__ = [
     'generation_router',
     'project_router',
     'provider_webhook_router',
-    'scene_router',
+    'screenplay_router',
 ]

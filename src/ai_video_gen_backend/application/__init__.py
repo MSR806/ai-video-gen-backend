@@ -30,11 +30,14 @@ from .generation import (
     UnsupportedOperationKeyError,
 )
 from .project import CreateProjectUseCase, GetAllProjectsUseCase, GetProjectByIdUseCase
-from .scene import (
-    CreateSceneUseCase,
-    DeleteSceneUseCase,
-    GetProjectScenesUseCase,
-    UpdateSceneUseCase,
+from .screenplay import (
+    CreateScreenplaySceneUseCase,
+    CreateScreenplayUseCase,
+    DeleteScreenplaySceneUseCase,
+    GetProjectScreenplayUseCase,
+    ReorderScreenplayScenesUseCase,
+    UpdateScreenplaySceneUseCase,
+    UpdateScreenplayTitleUseCase,
 )
 
 __all__ = [
@@ -42,9 +45,10 @@ __all__ = [
     'CreateCollectionItemUseCase',
     'CreateCollectionUseCase',
     'CreateProjectUseCase',
-    'CreateSceneUseCase',
+    'CreateScreenplaySceneUseCase',
+    'CreateScreenplayUseCase',
     'DeleteCollectionItemUseCase',
-    'DeleteSceneUseCase',
+    'DeleteScreenplaySceneUseCase',
     'GenerationFinalizationError',
     'GenerationFinalizer',
     'GenerationInputValidator',
@@ -56,13 +60,14 @@ __all__ = [
     'GetGenerationRunUseCase',
     'GetProjectByIdUseCase',
     'GetProjectCollectionsUseCase',
-    'GetProjectScenesUseCase',
+    'GetProjectScreenplayUseCase',
     'HandleFalWebhookUseCase',
     'InvalidChatMessagesError',
     'InvalidGenerationInputsError',
     'InvalidOutputCountError',
     'PayloadTooLargeError',
     'ReconcileGenerationRunUseCase',
+    'ReorderScreenplayScenesUseCase',
     'SendChatMessageUseCase',
     'SetCollectionItemFavoriteUseCase',
     'SubmitGenerationRunUseCase',
@@ -70,6 +75,7 @@ __all__ = [
     'UnsupportedMediaTypeError',
     'UnsupportedModelKeyError',
     'UnsupportedOperationKeyError',
-    'UpdateSceneUseCase',
+    'UpdateScreenplaySceneUseCase',
+    'UpdateScreenplayTitleUseCase',
     'UploadCollectionItemUseCase',
 ]

@@ -10,43 +10,7 @@ from ai_video_gen_backend.infrastructure.db.models import (
     CollectionItemModel,
     CollectionModel,
     ProjectModel,
-    SceneModel,
 )
-
-
-def test_unique_scene_number_constraint(db_session: Session) -> None:
-    project_id = uuid4()
-    db_session.add(
-        ProjectModel(
-            id=project_id,
-            name='Project',
-            description='Project for constraint test',
-            status='draft',
-        )
-    )
-    db_session.commit()
-
-    db_session.add_all(
-        [
-            SceneModel(
-                id=uuid4(),
-                project_id=project_id,
-                name='One',
-                scene_number=1,
-                content_json={'text': 'One'},
-            ),
-            SceneModel(
-                id=uuid4(),
-                project_id=project_id,
-                name='Duplicate',
-                scene_number=1,
-                content_json={'text': 'Duplicate'},
-            ),
-        ]
-    )
-
-    with pytest.raises(IntegrityError):
-        db_session.commit()
 
 
 def test_collection_item_project_collection_consistency_constraint(db_session: Session) -> None:

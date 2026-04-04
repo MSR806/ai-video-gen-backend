@@ -8,7 +8,6 @@ from ai_video_gen_backend.infrastructure.db.models import (
     CollectionItemModel,
     CollectionModel,
     ProjectModel,
-    SceneModel,
 )
 
 
@@ -16,7 +15,6 @@ def seed_baseline_data(session: Session) -> dict[str, UUID]:
     project_id = uuid4()
     collection_id = uuid4()
     item_id = uuid4()
-    scene_id = uuid4()
 
     session.add(
         ProjectModel(
@@ -53,21 +51,10 @@ def seed_baseline_data(session: Session) -> dict[str, UUID]:
             generation_source='upload',
         )
     )
-    session.add(
-        SceneModel(
-            id=scene_id,
-            project_id=project_id,
-            name='Scene 1',
-            scene_number=1,
-            content_json={'text': 'Opening scene'},
-        )
-    )
-
     session.commit()
 
     return {
         'project_id': project_id,
         'collection_id': collection_id,
         'item_id': item_id,
-        'scene_id': scene_id,
     }

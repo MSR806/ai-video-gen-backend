@@ -5,7 +5,8 @@ from .collection_model import CollectionModel
 from .generation_run_model import GenerationRunModel
 from .generation_run_output_model import GenerationRunOutputModel
 from .project_model import ProjectModel
-from .scene_model import SceneModel
+from .screenplay_model import ScreenplayModel
+from .screenplay_scene_model import ScreenplaySceneModel
 
 __all__ = [
     'ChatMessageModel',
@@ -15,5 +16,6 @@ __all__ = [
     'GenerationRunModel',
     'GenerationRunOutputModel',
     'ProjectModel',
-    'SceneModel',
+    'ScreenplayModel',
+    'ScreenplaySceneModel',
 ]

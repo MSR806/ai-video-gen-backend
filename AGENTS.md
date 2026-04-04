@@ -13,7 +13,7 @@ Any import that violates this direction is a hard error. Do not work around it w
 
 ## Feature-First Structure
 
-- Organize by feature: `project`, `collection`, `collection_item`, `scene`, `generation`.
+- Organize by feature: `project`, `collection`, `collection_item`, `screenplay`, `generation`.
 - Each feature defines entities and `Protocol`-based repository/service ports in `domain/<feature>/`.
 - Use-cases live in `application/<feature>/`.
 - SQLAlchemy models and repository implementations live in `infrastructure/repositories/`.
@@ -42,7 +42,7 @@ The following are **never** allowed:
 
 - PostgreSQL is the primary database for all environments except lightweight unit tests.
 - Schema changes must go through Alembic migrations only. Never modify tables manually.
-- Scene sync must be atomic per project (single transaction).
+- Screenplay sync must be atomic per project (single transaction).
 
 ## Dependency Assumptions
 

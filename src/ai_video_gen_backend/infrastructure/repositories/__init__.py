@@ -3,7 +3,7 @@ from .collection_item_repository import CollectionItemSqlRepository
 from .collection_repository import CollectionSqlRepository
 from .generation_run_repository import GenerationRunSqlRepository
 from .project_repository import ProjectSqlRepository
-from .scene_repository import SceneSqlRepository
+from .screenplay_repository import ScreenplaySqlRepository
 
 __all__ = [
     'ChatSqlRepository',
@@ -11,5 +11,5 @@ __all__ = [
     'CollectionSqlRepository',
     'GenerationRunSqlRepository',
     'ProjectSqlRepository',
-    'SceneSqlRepository',
+    'ScreenplaySqlRepository',
 ]
