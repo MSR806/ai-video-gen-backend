@@ -23,6 +23,7 @@ class ScreenplaySceneResponse(StrictSchema):
     screenplay_id: UUID = Field(alias='screenplayId')
     order_index: int = Field(alias='orderIndex')
     content: str
+    shot_count: int = Field(alias='shotCount')
     created_at: datetime | None = Field(default=None, alias='createdAt')
     updated_at: datetime | None = Field(default=None, alias='updatedAt')
 
@@ -33,6 +34,7 @@ class ScreenplaySceneResponse(StrictSchema):
             screenplay_id=scene.screenplay_id,
             order_index=scene.order_index,
             content=scene.content,
+            shot_count=scene.shot_count,
             created_at=scene.created_at,
             updated_at=scene.updated_at,
         )

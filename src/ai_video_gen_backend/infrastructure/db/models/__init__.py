@@ -7,6 +7,7 @@ from .generation_run_output_model import GenerationRunOutputModel
 from .project_model import ProjectModel
 from .screenplay_model import ScreenplayModel
 from .screenplay_scene_model import ScreenplaySceneModel
+from .shot_model import ShotModel
 
 __all__ = [
     'ChatMessageModel',
@@ -18,4 +19,5 @@ __all__ = [
     'ProjectModel',
     'ScreenplayModel',
     'ScreenplaySceneModel',
+    'ShotModel',
 ]

@@ -38,3 +38,9 @@ class ScreenplaySceneModel(Base):
     )
 
     screenplay = relationship('ScreenplayModel', back_populates='scenes')
+    shots = relationship(
+        'ShotModel',
+        back_populates='scene',
+        cascade='all, delete-orphan',
+        order_by='ShotModel.order_index',
+    )

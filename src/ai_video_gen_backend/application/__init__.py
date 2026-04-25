@@ -39,6 +39,13 @@ from .screenplay import (
     UpdateScreenplaySceneUseCase,
     UpdateScreenplayTitleUseCase,
 )
+from .shot import (
+    CreateShotUseCase,
+    DeleteShotUseCase,
+    ListShotsUseCase,
+    ReorderShotsUseCase,
+    UpdateShotUseCase,
+)
 
 __all__ = [
     'ChatThreadNotFoundError',
@@ -47,8 +54,10 @@ __all__ = [
     'CreateProjectUseCase',
     'CreateScreenplaySceneUseCase',
     'CreateScreenplayUseCase',
+    'CreateShotUseCase',
     'DeleteCollectionItemUseCase',
     'DeleteScreenplaySceneUseCase',
+    'DeleteShotUseCase',
     'GenerationFinalizationError',
     'GenerationFinalizer',
     'GenerationInputValidator',
@@ -65,9 +74,11 @@ __all__ = [
     'InvalidChatMessagesError',
     'InvalidGenerationInputsError',
     'InvalidOutputCountError',
+    'ListShotsUseCase',
     'PayloadTooLargeError',
     'ReconcileGenerationRunUseCase',
     'ReorderScreenplayScenesUseCase',
+    'ReorderShotsUseCase',
     'SendChatMessageUseCase',
     'SetCollectionItemFavoriteUseCase',
     'SubmitGenerationRunUseCase',
@@ -77,5 +88,6 @@ __all__ = [
     'UnsupportedOperationKeyError',
     'UpdateScreenplaySceneUseCase',
     'UpdateScreenplayTitleUseCase',
+    'UpdateShotUseCase',
     'UploadCollectionItemUseCase',
 ]

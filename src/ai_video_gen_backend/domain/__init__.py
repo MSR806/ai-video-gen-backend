@@ -42,6 +42,7 @@ from .generation import (
     ResolvedGenerationOperation,
 )
 from .project import Project, ProjectRepositoryPort, ProjectStatus
+from .shot import Shot, ShotCreateInput, ShotReorderInput, ShotRepositoryPort, ShotUpdateInput
 from .types import JsonObject, JsonValue
 
 __all__ = [
@@ -86,6 +87,11 @@ __all__ = [
     'ProjectStatus',
     'ResolvedGenerationOperation',
     'SendChatResult',
+    'Shot',
+    'ShotCreateInput',
+    'ShotReorderInput',
+    'ShotRepositoryPort',
+    'ShotUpdateInput',
     'StorageError',
     'StoredObject',
 ]
