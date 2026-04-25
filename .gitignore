@@ -23,6 +23,7 @@ venv/
 .coverage
 .coverage.*
 htmlcov/
+coverage.xml
 
 # Build artifacts
 build/

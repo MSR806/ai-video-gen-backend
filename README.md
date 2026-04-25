@@ -56,10 +56,7 @@ uv run pytest -q
 ## Coverage report
 
 ```bash
-source .venv/bin/activate
-uv run --with coverage coverage erase
-uv run --with coverage coverage run --source=src/ai_video_gen_backend -m pytest -q
-uv run --with coverage coverage report -m
+uv run pytest --cov=ai_video_gen_backend --cov-report=term-missing --cov-report=xml
 ```
 
 ## Commit message format
