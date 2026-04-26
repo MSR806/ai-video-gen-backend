@@ -36,7 +36,7 @@ class ScreenplaySqlRepository:
         stmt = (
             select(ScreenplayModel)
             .where(ScreenplayModel.project_id == project_id)
-            .options(selectinload(ScreenplayModel.scenes))
+            .options(selectinload(ScreenplayModel.scenes).selectinload(ScreenplaySceneModel.shots))
         )
         model = self._session.execute(stmt).scalar_one_or_none()
         return self._to_domain(model) if model is not None else None
@@ -249,7 +249,7 @@ class ScreenplaySqlRepository:
         stmt = (
             select(ScreenplayModel)
             .where(ScreenplayModel.id == screenplay_id)
-            .options(selectinload(ScreenplayModel.scenes))
+            .options(selectinload(ScreenplayModel.scenes).selectinload(ScreenplaySceneModel.shots))
         )
         model = self._session.execute(stmt).scalar_one()
         return self._to_domain(model)
@@ -271,6 +271,7 @@ class ScreenplaySqlRepository:
             screenplay_id=model.screenplay_id,
             order_index=model.order_index,
             content=self._normalize_content(model.content_xml),
+            shot_count=len(model.shots),
             created_at=model.created_at,
             updated_at=model.updated_at,
         )

@@ -11,6 +11,7 @@ class ScreenplayScene:
     screenplay_id: UUID
     order_index: int
     content: str
+    shot_count: int = 0
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

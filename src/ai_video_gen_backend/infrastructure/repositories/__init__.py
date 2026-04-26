@@ -4,6 +4,7 @@ from .collection_repository import CollectionSqlRepository
 from .generation_run_repository import GenerationRunSqlRepository
 from .project_repository import ProjectSqlRepository
 from .screenplay_repository import ScreenplaySqlRepository
+from .shot_repository import ShotSqlRepository
 
 __all__ = [
     'ChatSqlRepository',
@@ -12,4 +13,5 @@ __all__ = [
     'GenerationRunSqlRepository',
     'ProjectSqlRepository',
     'ScreenplaySqlRepository',
+    'ShotSqlRepository',
 ]
