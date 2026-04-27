@@ -1,8 +1,15 @@
 from __future__ import annotations
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from ai_video_gen_backend.application.shot import InvalidShotGenerationError
+from ai_video_gen_backend.domain.shot import ShotCreateInput
+from ai_video_gen_backend.presentation.api.dependencies import (
+    get_generate_shots_use_case,
+    get_shot_generation_provider,
+)
 from tests.support import seed_baseline_data
 
 
@@ -175,6 +182,131 @@ def test_shot_request_schema_is_strict(client: TestClient, db_session: Session) 
             **_create_shot_payload('Shot A'),
             'status': 'draft',
         },
+    )
+
+    assert response.status_code == 422
+
+
+def test_generate_shots_endpoint_replaces_scene_shots_with_generated_result(
+    client: TestClient,
+    app: FastAPI,
+    db_session: Session,
+) -> None:
+    project_id = seed_baseline_data(db_session)['project_id']
+    client.post(f'/api/v1/projects/{project_id}/screenplays', json={'title': 'Shots Screenplay'})
+
+    scene_response = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes',
+        json={'content': _scene_xml('generate')},
+    )
+    scene_id = scene_response.json()['scenes'][0]['id']
+
+    client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes/{scene_id}/shots',
+        json=_create_shot_payload('Legacy A'),
+    )
+    client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes/{scene_id}/shots',
+        json=_create_shot_payload('Legacy B'),
+    )
+
+    class FakeShotGenerator:
+        def generate_shots(self, scene_content: str) -> list[ShotCreateInput]:
+            assert 'scene' in scene_content
+            return [
+                ShotCreateInput(
+                    title='Shot 1',
+                    description='Generated first shot',
+                    camera_framing='Wide',
+                    camera_movement='Static',
+                    mood='Calm',
+                ),
+                ShotCreateInput(
+                    title='Shot 2',
+                    description='Generated second shot',
+                    camera_framing='Close-up',
+                    camera_movement='Pan right',
+                    mood='Focused',
+                ),
+                ShotCreateInput(
+                    title='Shot 3',
+                    description='Generated third shot',
+                    camera_framing='Medium',
+                    camera_movement='Dolly in',
+                    mood='Rising',
+                ),
+            ]
+
+    app.dependency_overrides[get_shot_generation_provider] = lambda: FakeShotGenerator()
+    try:
+        response = client.post(
+            f'/api/v1/projects/{project_id}/screenplays/scenes/{scene_id}/shots/generate'
+        )
+    finally:
+        app.dependency_overrides.pop(get_shot_generation_provider, None)
+
+    assert response.status_code == 200
+    generated = response.json()
+    assert [shot['orderIndex'] for shot in generated] == [1, 2, 3]
+    assert [shot['title'] for shot in generated] == ['Shot 1', 'Shot 2', 'Shot 3']
+
+    listed = client.get(f'/api/v1/projects/{project_id}/screenplays/scenes/{scene_id}/shots').json()
+    assert [shot['title'] for shot in listed] == ['Shot 1', 'Shot 2', 'Shot 3']
+    assert len(listed) == 3
+
+
+def test_generate_shots_endpoint_returns_400_on_invalid_generation(
+    client: TestClient,
+    app: FastAPI,
+    db_session: Session,
+) -> None:
+    project_id = seed_baseline_data(db_session)['project_id']
+    client.post(f'/api/v1/projects/{project_id}/screenplays', json={'title': 'Shots Screenplay'})
+    scene_id = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes',
+        json={'content': _scene_xml('bad')},
+    ).json()['scenes'][0]['id']
+
+    class RaisingGenerateShotsUseCase:
+        def execute(self, *, project_id: object, scene_id: object) -> None:
+            del project_id, scene_id
+            raise InvalidShotGenerationError('invalid shot output')
+
+    app.dependency_overrides[get_generate_shots_use_case] = lambda: RaisingGenerateShotsUseCase()
+    try:
+        response = client.post(
+            f'/api/v1/projects/{project_id}/screenplays/scenes/{scene_id}/shots/generate'
+        )
+    finally:
+        app.dependency_overrides.pop(get_generate_shots_use_case, None)
+
+    assert response.status_code == 400
+    assert response.json()['error']['code'] == 'invalid_shot_generation'
+
+
+def test_generate_shots_endpoint_returns_404_for_missing_scene(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    project_id = seed_baseline_data(db_session)['project_id']
+    client.post(f'/api/v1/projects/{project_id}/screenplays', json={'title': 'Shots Screenplay'})
+
+    response = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes/00000000-0000-0000-0000-000000000000/shots/generate'
+    )
+
+    assert response.status_code == 404
+    assert response.json()['error']['code'] == 'screenplay_scene_not_found'
+
+
+def test_generate_shots_endpoint_returns_422_for_invalid_scene_id(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    project_id = seed_baseline_data(db_session)['project_id']
+
+    response = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes/not-a-uuid/shots/generate'
     )
 
     assert response.status_code == 422

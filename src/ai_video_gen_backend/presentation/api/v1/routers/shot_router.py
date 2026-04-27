@@ -10,6 +10,7 @@ from ai_video_gen_backend.application.screenplay import GetProjectScreenplayUseC
 from ai_video_gen_backend.application.shot import (
     CreateShotUseCase,
     DeleteShotUseCase,
+    GenerateShotsUseCase,
     ListShotsUseCase,
     ReorderShotsUseCase,
     UpdateShotUseCase,
@@ -19,7 +20,10 @@ from ai_video_gen_backend.infrastructure.repositories import (
     ScreenplaySqlRepository,
     ShotSqlRepository,
 )
-from ai_video_gen_backend.presentation.api.dependencies import get_db_session
+from ai_video_gen_backend.presentation.api.dependencies import (
+    get_db_session,
+    get_generate_shots_use_case,
+)
 from ai_video_gen_backend.presentation.api.errors import ApiError
 from ai_video_gen_backend.presentation.api.v1.schemas import (
     CreateShotRequest,
@@ -152,3 +156,26 @@ def reorder_scene_shots(
         )
 
     return [ShotResponse.from_domain(shot) for shot in reordered]
+
+
+@router.post(
+    '/projects/{project_id}/screenplays/scenes/{scene_id}/shots/generate',
+    response_model=list[ShotResponse],
+)
+def generate_scene_shots(
+    project_id: UUID,
+    scene_id: UUID,
+    generate_shots_use_case: GenerateShotsUseCase = Depends(get_generate_shots_use_case),
+    session: Session = Depends(get_db_session),
+) -> list[ShotResponse]:
+    _require_project_scene(project_id, scene_id, session)
+
+    generated = generate_shots_use_case.execute(project_id=project_id, scene_id=scene_id)
+    if generated is None:
+        raise ApiError(
+            status_code=404,
+            code='screenplay_scene_not_found',
+            message='Screenplay scene not found',
+        )
+
+    return [ShotResponse.from_domain(shot) for shot in generated]
