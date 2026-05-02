@@ -125,5 +125,6 @@ Commit messages must follow Conventional Commits (`feat:`, `fix:`, `refactor:`, 
 - Treat hook failures as blockers and fix them before commit.
 
 4. Commit message policy:
-- Use Conventional Commit format.
+- Use Conventional Commit format with Linear issue ID: `feat(SUJ-10): description`
 - Keep message aligned with actual diff scope.
+- Every commit must reference a Linear issue. If none exists, create one first.
