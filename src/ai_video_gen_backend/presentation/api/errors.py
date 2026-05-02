@@ -25,6 +25,7 @@ from ai_video_gen_backend.application.generation import (
     UnsupportedModelKeyError,
     UnsupportedOperationKeyError,
 )
+from ai_video_gen_backend.application.shot import InvalidShotGenerationError
 from ai_video_gen_backend.domain.collection_item import (
     CollectionItemConstraintViolationError,
 )
@@ -195,6 +196,14 @@ _API_EXCEPTION_MAPPINGS: tuple[tuple[type[Exception], _ApiExceptionMapping], ...
             status_code=500,
             code='generation_finalize_failed',
             message=_generation_finalize_message,
+        ),
+    ),
+    (
+        InvalidShotGenerationError,
+        _ApiExceptionMapping(
+            status_code=400,
+            code='invalid_shot_generation',
+            message='Generated shots response is invalid',
         ),
     ),
 )

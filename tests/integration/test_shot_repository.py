@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID, uuid4
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -153,3 +154,57 @@ def test_shot_repository_respects_scene_cascade_delete(db_session: Session) -> N
 
     stmt = select(ShotModel).where(ShotModel.id == created.id)
     assert db_session.execute(stmt).scalar_one_or_none() is None
+
+
+def test_replace_shots_rolls_back_when_delete_phase_fails(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, _, scene_id = _seed_scene(db_session, 'ReplaceRollback')
+    repository = ShotSqlRepository(db_session)
+
+    first = repository.create_shot(
+        scene_id,
+        ShotCreateInput(
+            title='Existing 1',
+            description='Keep on failure',
+            camera_framing='Wide',
+            camera_movement='Static',
+            mood='Calm',
+        ),
+    )
+    second = repository.create_shot(
+        scene_id,
+        ShotCreateInput(
+            title='Existing 2',
+            description='Keep on failure',
+            camera_framing='Close-up',
+            camera_movement='Pan left',
+            mood='Tense',
+        ),
+    )
+    assert first is not None
+    assert second is not None
+
+    def failing_flush() -> None:
+        raise RuntimeError('simulated flush failure')
+
+    monkeypatch.setattr(db_session, 'flush', failing_flush)
+
+    with pytest.raises(RuntimeError, match='simulated flush failure'):
+        repository.replace_shots(
+            scene_id,
+            [
+                ShotCreateInput(
+                    title='Generated 1',
+                    description='New one',
+                    camera_framing='Medium',
+                    camera_movement='Dolly in',
+                    mood='Excited',
+                )
+            ],
+        )
+
+    preserved = repository.list_shots(scene_id)
+    assert [shot.title for shot in preserved] == ['Existing 1', 'Existing 2']
+    assert [shot.order_index for shot in preserved] == [1, 2]

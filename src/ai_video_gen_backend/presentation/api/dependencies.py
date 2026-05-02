@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ai_video_gen_backend.application.chat import SendChatMessageUseCase
 from ai_video_gen_backend.application.generation import GenerationInputValidator
+from ai_video_gen_backend.application.shot import GenerateShotsUseCase
 from ai_video_gen_backend.config.settings import Settings, get_settings
 from ai_video_gen_backend.domain.chat import ChatModelPort, ChatWorkflowPort
 from ai_video_gen_backend.domain.collection_item import (
@@ -19,12 +20,14 @@ from ai_video_gen_backend.domain.generation import (
     GenerationProviderPort,
     MediaDownloaderPort,
 )
+from ai_video_gen_backend.domain.shot import ShotGenerationPort
 from ai_video_gen_backend.infrastructure.db.session import get_session_factory
 from ai_video_gen_backend.infrastructure.providers import (
     FalGenerationProvider,
     HttpMediaDownloader,
     LangGraphChatWorkflow,
     OpenAIChatModelProvider,
+    OpenAIShotGenerationProvider,
 )
 from ai_video_gen_backend.infrastructure.providers.fal import (
     FalGenerationModelRegistry,
@@ -37,6 +40,7 @@ from ai_video_gen_backend.infrastructure.providers.langgraph_postgres_checkpoint
 from ai_video_gen_backend.infrastructure.repositories import (
     ChatSqlRepository,
     ScreenplaySqlRepository,
+    ShotSqlRepository,
 )
 from ai_video_gen_backend.infrastructure.storage import (
     FfmpegVideoThumbnailGenerator,
@@ -113,6 +117,28 @@ def get_chat_model_provider(
         api_key=settings.portkey_api_key,
         base_url=settings.chat_provider_base_url,
         temperature=settings.chat_model_temperature,
+    )
+
+
+def get_shot_generation_provider(
+    settings: Settings = Depends(get_app_settings),
+) -> ShotGenerationPort:
+    return OpenAIShotGenerationProvider(
+        model_name=settings.chat_model_name,
+        api_key=settings.portkey_api_key,
+        base_url=settings.chat_provider_base_url,
+        temperature=settings.chat_model_temperature,
+    )
+
+
+def get_generate_shots_use_case(
+    session: Session = Depends(get_db_session),
+    shot_generator: ShotGenerationPort = Depends(get_shot_generation_provider),
+) -> GenerateShotsUseCase:
+    return GenerateShotsUseCase(
+        shot_repository=ShotSqlRepository(session),
+        screenplay_repository=ScreenplaySqlRepository(session),
+        shot_generator=shot_generator,
     )
 
 

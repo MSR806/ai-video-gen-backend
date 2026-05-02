@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from ai_video_gen_backend.domain.shot import Shot, ShotCreateInput, ShotUpdateInput
@@ -127,6 +127,34 @@ class ShotSqlRepository:
                 )
                 .values(order_index=ShotModel.order_index - self._shot_order_shift)
             )
+
+            self._session.commit()
+            return self.list_shots(scene_id)
+        except Exception:
+            self._session.rollback()
+            raise
+
+    def replace_shots(self, scene_id: UUID, payloads: list[ShotCreateInput]) -> list[Shot] | None:
+        try:
+            if self._lock_scene(scene_id) is None:
+                return None
+
+            self._session.execute(delete(ShotModel).where(ShotModel.scene_id == scene_id))
+            self._session.flush()
+
+            for order_index, payload in enumerate(payloads, start=1):
+                self._session.add(
+                    ShotModel(
+                        id=uuid4(),
+                        scene_id=scene_id,
+                        order_index=order_index,
+                        title=payload.title,
+                        description=payload.description,
+                        camera_framing=payload.camera_framing,
+                        camera_movement=payload.camera_movement,
+                        mood=payload.mood,
+                    )
+                )
 
             self._session.commit()
             return self.list_shots(scene_id)
