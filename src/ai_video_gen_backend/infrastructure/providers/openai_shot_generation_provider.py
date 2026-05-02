@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-import json
-from collections.abc import Sequence
+from typing import cast
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ai_video_gen_backend.domain.shot import ShotCreateInput, ShotGenerationError
 
 _SHOT_GENERATION_SYSTEM_PROMPT = (
-    'You are a film storyboard assistant. Return only a JSON array (no markdown, no prose). '
-    'Each array item must be an object with string fields: '
+    'You are a film storyboard assistant. Return a structured response with a shots array. '
+    'Each shots item must include string fields: '
     'title, description, camera_framing, camera_movement, mood. '
     'Generate a natural number of shots based on scene complexity.'
 )
@@ -33,93 +33,57 @@ class OpenAIShotGenerationProvider:
         )
 
     def generate_shots(self, scene_content: str) -> list[ShotCreateInput]:
-        response = self._model.invoke(
-            [
-                SystemMessage(content=_SHOT_GENERATION_SYSTEM_PROMPT),
-                HumanMessage(content=scene_content),
-            ]
-        )
-        rendered = _extract_text(response.content)
-        return _parse_shot_payloads(rendered)
-
-
-def _extract_text(content: object) -> str:
-    if isinstance(content, str):
-        return content
-
-    if isinstance(content, Sequence):
-        chunks: list[str] = []
-        for item in content:
-            if isinstance(item, str):
-                chunks.append(item)
-                continue
-
-            if isinstance(item, dict):
-                text_value = item.get('text')
-                if isinstance(text_value, str):
-                    chunks.append(text_value)
-
-        combined = '\n'.join(chunk for chunk in chunks if chunk)
-        if combined:
-            return combined
-
-    raise ShotGenerationError('Model returned no text content')
-
-
-def _parse_shot_payloads(raw_text: str) -> list[ShotCreateInput]:
-    payload = _load_shot_json(raw_text)
-    if not isinstance(payload, list):
-        raise ShotGenerationError('Shot generator response must be a JSON array')
-    if len(payload) == 0:
-        raise ShotGenerationError('Shot generator returned no shots')
-
-    parsed: list[ShotCreateInput] = []
-    for item in payload:
-        parsed.append(_parse_shot_item(item))
-    return parsed
-
-
-def _load_shot_json(raw_text: str) -> object:
-    text = raw_text.strip()
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        start = text.find('[')
-        end = text.rfind(']')
-        if start == -1 or end == -1 or end <= start:
-            raise ShotGenerationError('Shot generator response is not valid JSON') from None
+        structured_model = self._model.with_structured_output(_ShotListResponse)
         try:
-            return json.loads(text[start : end + 1])
-        except json.JSONDecodeError as exc:
-            raise ShotGenerationError('Shot generator response is not valid JSON') from exc
+            response = cast(
+                _ShotListResponse,
+                structured_model.invoke(
+                    [
+                        SystemMessage(content=_SHOT_GENERATION_SYSTEM_PROMPT),
+                        HumanMessage(content=scene_content),
+                    ]
+                ),
+            )
+        except Exception as exc:
+            raise ShotGenerationError(f'Failed to parse generated shots: {exc}') from exc
+
+        shots = response.shots
+        if len(shots) == 0:
+            raise ShotGenerationError('Shot generator returned no shots')
+
+        return [
+            ShotCreateInput(
+                title=shot.title,
+                description=shot.description,
+                camera_framing=shot.camera_framing,
+                camera_movement=shot.camera_movement,
+                mood=shot.mood,
+            )
+            for shot in shots
+        ]
 
 
-def _parse_shot_item(item: object) -> ShotCreateInput:
-    if not isinstance(item, dict):
-        raise ShotGenerationError('Each generated shot must be an object')
+class _ShotSchema(BaseModel):
+    model_config = ConfigDict(extra='forbid')
 
-    title = _read_required_string(item, 'title')
-    description = _read_required_string(item, 'description')
-    camera_framing = _read_required_string(item, 'camera_framing')
-    camera_movement = _read_required_string(item, 'camera_movement')
-    mood = _read_required_string(item, 'mood')
+    title: str
+    description: str
+    camera_framing: str
+    camera_movement: str
+    mood: str
 
-    return ShotCreateInput(
-        title=title,
-        description=description,
-        camera_framing=camera_framing,
-        camera_movement=camera_movement,
-        mood=mood,
+    @field_validator('title', 'description', 'camera_framing', 'camera_movement', 'mood')
+    @classmethod
+    def _validate_non_empty_string(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError('must not be empty')
+        return normalized
+
+
+class _ShotListResponse(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
+    shots: list[_ShotSchema] = Field(
+        description='Generated storyboard shots for the scene.',
     )
-
-
-def _read_required_string(item: dict[object, object], key: str) -> str:
-    value = item.get(key)
-    if not isinstance(value, str):
-        raise ShotGenerationError(f'Generated shot field {key} must be a string')
-
-    normalized = value.strip()
-    if not normalized:
-        raise ShotGenerationError(f'Generated shot field {key} must not be empty')
-
-    return normalized
