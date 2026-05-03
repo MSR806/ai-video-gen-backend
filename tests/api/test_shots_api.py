@@ -312,3 +312,135 @@ def test_generate_shots_endpoint_returns_422_for_invalid_scene_id(
     )
 
     assert response.status_code == 422
+
+
+def test_ensure_shot_visual_collection_is_idempotent_and_reuses_scene_parent(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    project_id = seed_baseline_data(db_session)['project_id']
+    client.post(f'/api/v1/projects/{project_id}/screenplays', json={'title': 'Shots Screenplay'})
+
+    scene_response = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes',
+        json={'content': _scene_xml('visual')},
+    )
+    scene_id = scene_response.json()['scenes'][0]['id']
+
+    first_shot_id = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes/{scene_id}/shots',
+        json=_create_shot_payload('First shot'),
+    ).json()['id']
+    second_shot_id = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes/{scene_id}/shots',
+        json=_create_shot_payload('Second shot'),
+    ).json()['id']
+
+    before = client.get(f'/api/v1/projects/{project_id}/screenplays/scenes/{scene_id}/shots')
+    assert before.status_code == 200
+    assert [shot['collectionId'] for shot in before.json()] == [None, None]
+
+    first_call = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes/{scene_id}/shots/{first_shot_id}/visual-collection'
+    )
+    assert first_call.status_code == 200
+    first_collection = first_call.json()
+    assert first_collection['tag'] == 'shot'
+    assert first_collection['parentCollectionId'] is not None
+
+    second_call = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes/{scene_id}/shots/{first_shot_id}/visual-collection'
+    )
+    assert second_call.status_code == 200
+    assert second_call.json()['id'] == first_collection['id']
+    assert second_call.json()['parentCollectionId'] == first_collection['parentCollectionId']
+
+    other_shot_call = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes/{scene_id}/shots/{second_shot_id}/visual-collection'
+    )
+    assert other_shot_call.status_code == 200
+    other_collection = other_shot_call.json()
+    assert other_collection['id'] != first_collection['id']
+    assert other_collection['parentCollectionId'] == first_collection['parentCollectionId']
+
+    after = client.get(f'/api/v1/projects/{project_id}/screenplays/scenes/{scene_id}/shots')
+    assert after.status_code == 200
+    linked_ids = [shot['collectionId'] for shot in after.json()]
+    assert linked_ids == [first_collection['id'], other_collection['id']]
+
+    collections_response = client.get(f'/api/v1/projects/{project_id}/collections')
+    assert collections_response.status_code == 200
+    all_collections = collections_response.json()
+    scene_collections = [item for item in all_collections if item['tag'] == 'scene']
+    shot_collections = [item for item in all_collections if item['tag'] == 'shot']
+    assert len(scene_collections) == 1
+    assert len(shot_collections) == 2
+
+
+def test_ensure_shot_visual_collection_does_not_share_collections_across_same_named_scenes(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    project_id = seed_baseline_data(db_session)['project_id']
+    client.post(f'/api/v1/projects/{project_id}/screenplays', json={'title': 'Shots Screenplay'})
+
+    first_scene_response = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes',
+        json={'content': _scene_xml('shared')},
+    )
+    first_scene_id = first_scene_response.json()['scenes'][0]['id']
+    second_scene_response = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes',
+        json={'content': _scene_xml('shared')},
+    )
+    second_scene_id = second_scene_response.json()['scenes'][1]['id']
+
+    first_shot_id = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes/{first_scene_id}/shots',
+        json=_create_shot_payload('Same opener'),
+    ).json()['id']
+    second_shot_id = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes/{second_scene_id}/shots',
+        json=_create_shot_payload('Same opener'),
+    ).json()['id']
+
+    first_collection = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes/{first_scene_id}/shots/{first_shot_id}/visual-collection'
+    ).json()
+    second_collection = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes/{second_scene_id}/shots/{second_shot_id}/visual-collection'
+    ).json()
+
+    assert first_collection['id'] != second_collection['id']
+    assert first_collection['parentCollectionId'] is not None
+    assert second_collection['parentCollectionId'] is not None
+    assert first_collection['parentCollectionId'] != second_collection['parentCollectionId']
+
+    collections_response = client.get(f'/api/v1/projects/{project_id}/collections')
+    assert collections_response.status_code == 200
+    all_collections = collections_response.json()
+    scene_collections = [item for item in all_collections if item['tag'] == 'scene']
+    shot_collections = [item for item in all_collections if item['tag'] == 'shot']
+    assert len(scene_collections) == 2
+    assert len(shot_collections) == 2
+
+
+def test_ensure_shot_visual_collection_returns_404_for_missing_shot(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    project_id = seed_baseline_data(db_session)['project_id']
+    client.post(f'/api/v1/projects/{project_id}/screenplays', json={'title': 'Shots Screenplay'})
+
+    scene_response = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes',
+        json={'content': _scene_xml('missing-shot')},
+    )
+    scene_id = scene_response.json()['scenes'][0]['id']
+
+    response = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes/{scene_id}/shots/00000000-0000-0000-0000-000000000000/visual-collection'
+    )
+
+    assert response.status_code == 404
+    assert response.json()['error']['code'] == 'shot_not_found'

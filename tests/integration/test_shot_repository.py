@@ -245,3 +245,127 @@ def test_shot_repository_maps_collection_id_when_present(db_session: Session) ->
     shot = ShotSqlRepository(db_session).list_shots(scene_id)[0]
     assert shot.id == shot_id
     assert shot.collection_id == collection_id
+
+
+def test_get_shot_is_scene_scoped(db_session: Session) -> None:
+    _, _, scene_a_id = _seed_scene(db_session, 'GetShotA')
+    _, _, scene_b_id = _seed_scene(db_session, 'GetShotB')
+    repository = ShotSqlRepository(db_session)
+
+    created = repository.create_shot(
+        scene_a_id,
+        ShotCreateInput(
+            title='Scoped shot',
+            description='Scene A only',
+            camera_framing='Wide',
+            camera_movement='Static',
+            mood='Neutral',
+        ),
+    )
+    assert created is not None
+
+    assert repository.get_shot(scene_a_id, created.id) is not None
+    assert repository.get_shot(scene_b_id, created.id) is None
+
+
+def test_set_shot_collection_updates_only_with_matching_scene(db_session: Session) -> None:
+    project_a_id, _, scene_a_id = _seed_scene(db_session, 'SetCollectionA')
+    project_b_id, _, scene_b_id = _seed_scene(db_session, 'SetCollectionB')
+    repository = ShotSqlRepository(db_session)
+
+    created = repository.create_shot(
+        scene_a_id,
+        ShotCreateInput(
+            title='Collection target',
+            description='Collection assignment',
+            camera_framing='Close-up',
+            camera_movement='Pan left',
+            mood='Tense',
+        ),
+    )
+    assert created is not None
+
+    collection_id = uuid4()
+    db_session.add(
+        CollectionModel(
+            id=collection_id,
+            project_id=project_a_id,
+            name='Shot refs',
+            tag='shot',
+            description='Collection for shots',
+        )
+    )
+    unrelated_collection_id = uuid4()
+    db_session.add(
+        CollectionModel(
+            id=unrelated_collection_id,
+            project_id=project_b_id,
+            name='Other refs',
+            tag='shot',
+            description='Different project collection',
+        )
+    )
+    db_session.commit()
+
+    wrong_scene_update = repository.set_shot_collection(
+        scene_b_id, created.id, unrelated_collection_id
+    )
+    assert wrong_scene_update is None
+    unchanged = repository.get_shot(scene_a_id, created.id)
+    assert unchanged is not None
+    assert unchanged.collection_id is None
+
+    updated = repository.set_shot_collection(scene_a_id, created.id, collection_id)
+    assert updated is not None
+    assert updated.collection_id == collection_id
+
+
+def test_set_shot_collection_does_not_overwrite_existing_link(db_session: Session) -> None:
+    project_id, _, scene_id = _seed_scene(db_session, 'SetCollectionLocked')
+    repository = ShotSqlRepository(db_session)
+
+    created = repository.create_shot(
+        scene_id,
+        ShotCreateInput(
+            title='Collection lock target',
+            description='Preserve initial link',
+            camera_framing='Close-up',
+            camera_movement='Static',
+            mood='Calm',
+        ),
+    )
+    assert created is not None
+
+    initial_collection_id = uuid4()
+    next_collection_id = uuid4()
+    db_session.add(
+        CollectionModel(
+            id=initial_collection_id,
+            project_id=project_id,
+            name='Initial refs',
+            tag='shot',
+            description='Initial shot collection',
+        )
+    )
+    db_session.add(
+        CollectionModel(
+            id=next_collection_id,
+            project_id=project_id,
+            name='Next refs',
+            tag='shot',
+            description='Secondary shot collection',
+        )
+    )
+    db_session.commit()
+
+    first_link = repository.set_shot_collection(scene_id, created.id, initial_collection_id)
+    assert first_link is not None
+    assert first_link.collection_id == initial_collection_id
+
+    second_link = repository.set_shot_collection(scene_id, created.id, next_collection_id)
+    assert second_link is not None
+    assert second_link.collection_id == initial_collection_id
+
+    stored = repository.get_shot(scene_id, created.id)
+    assert stored is not None
+    assert stored.collection_id == initial_collection_id

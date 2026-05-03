@@ -10,6 +10,7 @@ from ai_video_gen_backend.application.screenplay import GetProjectScreenplayUseC
 from ai_video_gen_backend.application.shot import (
     CreateShotUseCase,
     DeleteShotUseCase,
+    EnsureShotVisualCollectionUseCase,
     GenerateShotsUseCase,
     ListShotsUseCase,
     ReorderShotsUseCase,
@@ -22,10 +23,12 @@ from ai_video_gen_backend.infrastructure.repositories import (
 )
 from ai_video_gen_backend.presentation.api.dependencies import (
     get_db_session,
+    get_ensure_shot_visual_collection_use_case,
     get_generate_shots_use_case,
 )
 from ai_video_gen_backend.presentation.api.errors import ApiError
 from ai_video_gen_backend.presentation.api.v1.schemas import (
+    CollectionResponse,
     CreateShotRequest,
     ReorderShotsRequest,
     ShotResponse,
@@ -179,3 +182,25 @@ def generate_scene_shots(
         )
 
     return [ShotResponse.from_domain(shot) for shot in generated]
+
+
+@router.post(
+    '/projects/{project_id}/screenplays/scenes/{scene_id}/shots/{shot_id}/visual-collection',
+    response_model=CollectionResponse,
+)
+def ensure_shot_visual_collection(
+    project_id: UUID,
+    scene_id: UUID,
+    shot_id: UUID,
+    use_case: EnsureShotVisualCollectionUseCase = Depends(
+        get_ensure_shot_visual_collection_use_case
+    ),
+    session: Session = Depends(get_db_session),
+) -> CollectionResponse:
+    _require_project_scene(project_id, scene_id, session)
+
+    collection = use_case.execute(project_id=project_id, scene_id=scene_id, shot_id=shot_id)
+    if collection is None:
+        raise ApiError(status_code=404, code='shot_not_found', message='Shot not found')
+
+    return CollectionResponse.from_domain(collection)
