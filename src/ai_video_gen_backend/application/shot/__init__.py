@@ -7,6 +7,13 @@ from .craft_shot_image_prompt import (
 from .create_shot import CreateShotUseCase
 from .delete_shot import DeleteShotUseCase
 from .ensure_shot_visual_collection import EnsureShotVisualCollectionUseCase
+from .generate_shot_visuals import (
+    GenerateShotVisualsRequest,
+    GenerateShotVisualsUseCase,
+    ShotVisualGenerationResult,
+    ShotVisualsProjectNotFoundError,
+    ShotVisualsSceneNotFoundError,
+)
 from .generate_shots import GenerateShotsUseCase, InvalidShotGenerationError
 from .list_shots import ListShotsUseCase
 from .reorder_shots import ReorderShotsUseCase
@@ -17,6 +24,8 @@ __all__ = [
     'CreateShotUseCase',
     'DeleteShotUseCase',
     'EnsureShotVisualCollectionUseCase',
+    'GenerateShotVisualsRequest',
+    'GenerateShotVisualsUseCase',
     'GenerateShotsUseCase',
     'InvalidShotGenerationError',
     'ListShotsUseCase',
@@ -24,5 +33,8 @@ __all__ = [
     'ReorderShotsUseCase',
     'ScreenplaySceneNotFoundError',
     'ShotNotFoundError',
+    'ShotVisualGenerationResult',
+    'ShotVisualsProjectNotFoundError',
+    'ShotVisualsSceneNotFoundError',
     'UpdateShotUseCase',
 ]

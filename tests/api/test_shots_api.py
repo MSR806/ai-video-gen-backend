@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from ai_video_gen_backend.application.shot import InvalidShotGenerationError
 from ai_video_gen_backend.domain.shot import ShotCreateInput
 from ai_video_gen_backend.presentation.api.dependencies import (
+    get_generate_shot_visuals_use_case,
     get_generate_shots_use_case,
     get_shot_generation_provider,
 )
@@ -444,3 +445,98 @@ def test_ensure_shot_visual_collection_returns_404_for_missing_shot(
 
     assert response.status_code == 404
     assert response.json()['error']['code'] == 'shot_not_found'
+
+
+def test_generate_shot_visuals_endpoint_single_and_batch_partial_failure(
+    client: TestClient,
+    app: FastAPI,
+    db_session: Session,
+) -> None:
+    project_id = seed_baseline_data(db_session)['project_id']
+    client.post(f'/api/v1/projects/{project_id}/screenplays', json={'title': 'Shots Screenplay'})
+    scene_id = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes',
+        json={'content': _scene_xml('visual-generate')},
+    ).json()['scenes'][0]['id']
+    shot_a_id = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes/{scene_id}/shots',
+        json=_create_shot_payload('Shot A'),
+    ).json()['id']
+    shot_b_id = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes/{scene_id}/shots',
+        json=_create_shot_payload('Shot B'),
+    ).json()['id']
+
+    class FakeGenerateShotVisualsUseCase:
+        def execute(self, request: object) -> list[object]:
+            del request
+            from dataclasses import dataclass
+            from uuid import UUID, uuid4
+
+            @dataclass(frozen=True)
+            class _Result:
+                shot_id: UUID
+                collection_id: UUID | None
+                run_id: UUID | None
+                status: str
+                error: str | None = None
+
+            return [
+                _Result(
+                    shot_id=UUID(shot_a_id),
+                    collection_id=uuid4(),
+                    run_id=uuid4(),
+                    status='IN_PROGRESS',
+                ),
+                _Result(
+                    shot_id=UUID(shot_b_id),
+                    collection_id=uuid4(),
+                    run_id=None,
+                    status='FAILED',
+                    error='submit failed',
+                ),
+            ]
+
+    app.dependency_overrides[get_generate_shot_visuals_use_case] = lambda: (
+        FakeGenerateShotVisualsUseCase()
+    )
+    try:
+        response = client.post(
+            f'/api/v1/projects/{project_id}/screenplays/scenes/{scene_id}/shots/generate-visuals',
+            json={
+                'shotIds': [shot_a_id, shot_b_id],
+                'modelKey': 'model',
+                'operationKey': 'op',
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_generate_shot_visuals_use_case, None)
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert len(payload) == 2
+    assert payload[0]['shotId'] == shot_a_id
+    assert payload[0]['status'] == 'IN_PROGRESS'
+    assert payload[1]['shotId'] == shot_b_id
+    assert payload[1]['status'] == 'FAILED'
+    assert payload[1]['error'] == 'submit failed'
+
+
+def test_generate_shot_visuals_endpoint_returns_404_for_missing_scene(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    project_id = seed_baseline_data(db_session)['project_id']
+    client.post(f'/api/v1/projects/{project_id}/screenplays', json={'title': 'Shots Screenplay'})
+
+    response = client.post(
+        f'/api/v1/projects/{project_id}/screenplays/scenes/00000000-0000-0000-0000-000000000000/shots/generate-visuals',
+        json={
+            'shotIds': ['00000000-0000-0000-0000-000000000000'],
+            'modelKey': 'm',
+            'operationKey': 'o',
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json()['error']['code'] == 'screenplay_scene_not_found'

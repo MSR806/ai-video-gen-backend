@@ -12,9 +12,13 @@ from ai_video_gen_backend.application.shot import (
     DeleteShotUseCase,
     EnsureShotVisualCollectionUseCase,
     GenerateShotsUseCase,
+    GenerateShotVisualsUseCase,
     ListShotsUseCase,
     ReorderShotsUseCase,
     UpdateShotUseCase,
+)
+from ai_video_gen_backend.application.shot import (
+    GenerateShotVisualsRequest as GenerateShotVisualsUseCaseRequest,
 )
 from ai_video_gen_backend.infrastructure.repositories import (
     ProjectSqlRepository,
@@ -24,14 +28,17 @@ from ai_video_gen_backend.infrastructure.repositories import (
 from ai_video_gen_backend.presentation.api.dependencies import (
     get_db_session,
     get_ensure_shot_visual_collection_use_case,
+    get_generate_shot_visuals_use_case,
     get_generate_shots_use_case,
 )
 from ai_video_gen_backend.presentation.api.errors import ApiError
 from ai_video_gen_backend.presentation.api.v1.schemas import (
     CollectionResponse,
     CreateShotRequest,
+    GenerateShotVisualsRequest,
     ReorderShotsRequest,
     ShotResponse,
+    ShotVisualGenerationResponse,
     UpdateShotRequest,
 )
 
@@ -204,3 +211,36 @@ def ensure_shot_visual_collection(
         raise ApiError(status_code=404, code='shot_not_found', message='Shot not found')
 
     return CollectionResponse.from_domain(collection)
+
+
+@router.post(
+    '/projects/{project_id}/screenplays/scenes/{scene_id}/shots/generate-visuals',
+    response_model=list[ShotVisualGenerationResponse],
+    status_code=202,
+)
+def generate_shot_visuals(
+    project_id: UUID,
+    scene_id: UUID,
+    request: GenerateShotVisualsRequest,
+    use_case: GenerateShotVisualsUseCase = Depends(get_generate_shot_visuals_use_case),
+) -> list[ShotVisualGenerationResponse]:
+    generated = use_case.execute(
+        GenerateShotVisualsUseCaseRequest(
+            project_id=project_id,
+            scene_id=scene_id,
+            shot_ids=request.shot_ids,
+            model_key=request.model_key,
+            operation_key=request.operation_key,
+            prompt=request.prompt,
+        )
+    )
+    return [
+        ShotVisualGenerationResponse(
+            shot_id=result.shot_id,
+            collection_id=result.collection_id,
+            run_id=result.run_id,
+            status=result.status,
+            error=result.error,
+        )
+        for result in generated
+    ]
