@@ -20,7 +20,7 @@ from .generation_submit_schema import (
     GenerationRunSubmitRequest,
     GenerationRunSubmitResponse,
 )
-from .project_schema import CreateProjectRequest, ProjectResponse
+from .project_schema import CreateProjectRequest, ProjectResponse, UpdateProjectRequest
 from .screenplay_schema import (
     CreateScreenplayRequest,
     CreateScreenplaySceneRequest,
@@ -58,6 +58,7 @@ __all__ = [
     'ScreenplaySceneResponse',
     'SetCollectionItemFavoriteRequest',
     'ShotResponse',
+    'UpdateProjectRequest',
     'UpdateScreenplayRequest',
     'UpdateScreenplaySceneRequest',
     'UpdateShotRequest',

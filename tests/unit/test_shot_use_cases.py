@@ -34,6 +34,7 @@ class FakeShotRepository:
         shot = Shot(
             id=uuid4(),
             scene_id=scene_id,
+            collection_id=None,
             order_index=order_index,
             title=payload.title,
             description=payload.description,
@@ -54,6 +55,7 @@ class FakeShotRepository:
             updated = Shot(
                 id=shot.id,
                 scene_id=shot.scene_id,
+                collection_id=shot.collection_id,
                 order_index=shot.order_index,
                 title=payload.title if payload.title is not None else shot.title,
                 description=payload.description
@@ -102,6 +104,7 @@ class FakeShotRepository:
                 Shot(
                     id=shot.id,
                     scene_id=shot.scene_id,
+                    collection_id=shot.collection_id,
                     order_index=order_by_id[shot.id],
                     title=shot.title,
                     description=shot.description,
@@ -133,6 +136,7 @@ class FakeShotRepository:
                 Shot(
                     id=uuid4(),
                     scene_id=scene_id,
+                    collection_id=None,
                     order_index=order_index,
                     title=payload.title,
                     description=payload.description,
@@ -210,6 +214,7 @@ def _shot_fixture(scene_id: UUID, order_index: int) -> Shot:
     return Shot(
         id=uuid4(),
         scene_id=scene_id,
+        collection_id=None,
         order_index=order_index,
         title=f'Shot {order_index}',
         description='Description',

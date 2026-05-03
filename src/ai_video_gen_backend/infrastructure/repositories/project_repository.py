@@ -5,7 +5,12 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ai_video_gen_backend.domain.project import Project, ProjectCreationPayload
+from ai_video_gen_backend.domain.project import (
+    DEFAULT_PROJECT_ASPECT_RATIO,
+    Project,
+    ProjectCreationPayload,
+    ProjectUpdatePayload,
+)
 from ai_video_gen_backend.infrastructure.db.models import ProjectModel
 
 
@@ -27,9 +32,30 @@ class ProjectSqlRepository:
         model = ProjectModel(
             name=payload.name,
             description=payload.description,
+            style=payload.style,
+            aspect_ratio=payload.aspect_ratio,
             status=payload.status,
         )
         self._session.add(model)
+        self._session.commit()
+        self._session.refresh(model)
+        return self._to_domain(model)
+
+    def update_project(self, project_id: UUID, payload: ProjectUpdatePayload) -> Project | None:
+        stmt = select(ProjectModel).where(ProjectModel.id == project_id)
+        model = self._session.execute(stmt).scalar_one_or_none()
+        if model is None:
+            return None
+
+        if payload.update_name and payload.name is not None:
+            model.name = payload.name
+        if payload.update_description and payload.description is not None:
+            model.description = payload.description
+        if payload.update_style:
+            model.style = payload.style
+        if payload.update_aspect_ratio and payload.aspect_ratio is not None:
+            model.aspect_ratio = payload.aspect_ratio
+
         self._session.commit()
         self._session.refresh(model)
         return self._to_domain(model)
@@ -39,6 +65,8 @@ class ProjectSqlRepository:
             id=model.id,
             name=model.name,
             description=model.description,
+            style=model.style,
+            aspect_ratio=model.aspect_ratio or DEFAULT_PROJECT_ASPECT_RATIO,
             status=model.status,
             created_at=model.created_at,
             updated_at=model.updated_at,

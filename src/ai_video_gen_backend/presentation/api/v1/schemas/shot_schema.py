@@ -17,6 +17,7 @@ from ai_video_gen_backend.presentation.api.v1.schemas.base import StrictSchema
 class ShotResponse(StrictSchema):
     id: UUID
     scene_id: UUID = Field(alias='sceneId')
+    collection_id: UUID | None = Field(default=None, alias='collectionId')
     order_index: int = Field(alias='orderIndex')
     title: str
     description: str
@@ -31,6 +32,7 @@ class ShotResponse(StrictSchema):
         return cls(
             id=shot.id,
             scene_id=shot.scene_id,
+            collection_id=shot.collection_id,
             order_index=shot.order_index,
             title=shot.title,
             description=shot.description,

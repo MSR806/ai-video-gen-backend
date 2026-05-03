@@ -9,6 +9,7 @@ from uuid import UUID
 class Shot:
     id: UUID
     scene_id: UUID
+    collection_id: UUID | None
     order_index: int
     title: str
     description: str

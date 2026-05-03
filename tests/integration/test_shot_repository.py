@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ai_video_gen_backend.domain.shot import ShotCreateInput, ShotUpdateInput
 from ai_video_gen_backend.infrastructure.db.models import (
+    CollectionModel,
     ProjectModel,
     ScreenplayModel,
     ScreenplaySceneModel,
@@ -91,6 +92,8 @@ def test_shot_repository_crud_and_reorder_is_scene_scoped(db_session: Session) -
     assert third is not None
     assert [shot.order_index for shot in repository.list_shots(scene_a_uuid)] == [1, 2]
     assert [shot.order_index for shot in repository.list_shots(scene_b_uuid)] == [1]
+    assert first.collection_id is None
+    assert second.collection_id is None
 
     updated = repository.update_shot(scene_a_uuid, first.id, ShotUpdateInput(mood='Ominous'))
     assert updated is not None
@@ -208,3 +211,37 @@ def test_replace_shots_rolls_back_when_delete_phase_fails(
     preserved = repository.list_shots(scene_id)
     assert [shot.title for shot in preserved] == ['Existing 1', 'Existing 2']
     assert [shot.order_index for shot in preserved] == [1, 2]
+
+
+def test_shot_repository_maps_collection_id_when_present(db_session: Session) -> None:
+    project_id, _, scene_id = _seed_scene(db_session, 'CollectionLink')
+    collection_id = uuid4()
+    db_session.add(
+        CollectionModel(
+            id=collection_id,
+            project_id=project_id,
+            name='Shot refs',
+            tag='shots',
+            description='Collection for shot references',
+        )
+    )
+
+    shot_id = uuid4()
+    db_session.add(
+        ShotModel(
+            id=shot_id,
+            scene_id=scene_id,
+            collection_id=collection_id,
+            order_index=1,
+            title='Linked shot',
+            description='Has collection link',
+            camera_framing='Wide',
+            camera_movement='Static',
+            mood='Calm',
+        )
+    )
+    db_session.commit()
+
+    shot = ShotSqlRepository(db_session).list_shots(scene_id)[0]
+    assert shot.id == shot_id
+    assert shot.collection_id == collection_id
