@@ -30,6 +30,8 @@ from ai_video_gen_backend.application.shot import (
     ProjectNotFoundError,
     ScreenplaySceneNotFoundError,
     ShotNotFoundError,
+    ShotVisualsProjectNotFoundError,
+    ShotVisualsSceneNotFoundError,
 )
 from ai_video_gen_backend.domain.collection_item import (
     CollectionItemConstraintViolationError,
@@ -233,6 +235,22 @@ _API_EXCEPTION_MAPPINGS: tuple[tuple[type[Exception], _ApiExceptionMapping], ...
             status_code=404,
             code='shot_not_found',
             message='Shot not found',
+        ),
+    ),
+    (
+        ShotVisualsProjectNotFoundError,
+        _ApiExceptionMapping(
+            status_code=404,
+            code='project_not_found',
+            message='Project not found',
+        ),
+    ),
+    (
+        ShotVisualsSceneNotFoundError,
+        _ApiExceptionMapping(
+            status_code=404,
+            code='screenplay_scene_not_found',
+            message='Screenplay scene not found',
         ),
     ),
 )

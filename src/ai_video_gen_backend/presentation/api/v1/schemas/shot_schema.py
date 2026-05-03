@@ -106,3 +106,18 @@ class ReorderShotsRequest(StrictSchema):
 
     def to_domain(self) -> ShotReorderInput:
         return ShotReorderInput(shot_ids=list(self.shot_ids))
+
+
+class GenerateShotVisualsRequest(StrictSchema):
+    shot_ids: list[UUID] = Field(alias='shotIds', min_length=1)
+    model_key: str = Field(alias='modelKey', min_length=1)
+    operation_key: str = Field(alias='operationKey', min_length=1)
+    prompt: str | None = Field(default=None)
+
+
+class ShotVisualGenerationResponse(StrictSchema):
+    shot_id: UUID = Field(alias='shotId')
+    collection_id: UUID | None = Field(default=None, alias='collectionId')
+    run_id: UUID | None = Field(default=None, alias='runId')
+    status: str
+    error: str | None = None

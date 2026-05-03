@@ -30,7 +30,14 @@ from .screenplay_schema import (
     UpdateScreenplayRequest,
     UpdateScreenplaySceneRequest,
 )
-from .shot_schema import CreateShotRequest, ReorderShotsRequest, ShotResponse, UpdateShotRequest
+from .shot_schema import (
+    CreateShotRequest,
+    GenerateShotVisualsRequest,
+    ReorderShotsRequest,
+    ShotResponse,
+    ShotVisualGenerationResponse,
+    UpdateShotRequest,
+)
 
 __all__ = [
     'ChatRequest',
@@ -47,6 +54,7 @@ __all__ = [
     'CreateScreenplaySceneRequest',
     'CreateShotRequest',
     'ErrorEnvelope',
+    'GenerateShotVisualsRequest',
     'GenerationCapabilitiesResponse',
     'GenerationRunResponse',
     'GenerationRunSubmitRequest',
@@ -58,6 +66,7 @@ __all__ = [
     'ScreenplaySceneResponse',
     'SetCollectionItemFavoriteRequest',
     'ShotResponse',
+    'ShotVisualGenerationResponse',
     'UpdateProjectRequest',
     'UpdateScreenplayRequest',
     'UpdateScreenplaySceneRequest',

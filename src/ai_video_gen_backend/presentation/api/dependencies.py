@@ -7,11 +7,15 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from ai_video_gen_backend.application.chat import SendChatMessageUseCase
-from ai_video_gen_backend.application.generation import GenerationInputValidator
+from ai_video_gen_backend.application.generation import (
+    GenerationInputValidator,
+    SubmitGenerationRunUseCase,
+)
 from ai_video_gen_backend.application.shot import (
     CraftShotImagePromptUseCase,
     EnsureShotVisualCollectionUseCase,
     GenerateShotsUseCase,
+    GenerateShotVisualsUseCase,
 )
 from ai_video_gen_backend.config.settings import Settings, get_settings
 from ai_video_gen_backend.domain.chat import ChatModelPort, ChatWorkflowPort
@@ -44,7 +48,9 @@ from ai_video_gen_backend.infrastructure.providers.langgraph_postgres_checkpoint
 )
 from ai_video_gen_backend.infrastructure.repositories import (
     ChatSqlRepository,
+    CollectionItemSqlRepository,
     CollectionSqlRepository,
+    GenerationRunSqlRepository,
     ProjectSqlRepository,
     ScreenplaySqlRepository,
     ShotSqlRepository,
@@ -179,6 +185,52 @@ def get_ensure_shot_visual_collection_use_case(
         shot_repository=ShotSqlRepository(session),
         screenplay_repository=ScreenplaySqlRepository(session),
         collection_repository=CollectionSqlRepository(session),
+    )
+
+
+def get_submit_generation_run_use_case(
+    session: Session = Depends(get_db_session),
+    settings: Settings = Depends(get_app_settings),
+    generation_provider: GenerationProviderPort = Depends(get_generation_provider),
+    capability_registry: GenerationCapabilityRegistryPort = Depends(
+        get_generation_capability_registry
+    ),
+    input_validator: GenerationInputValidator = Depends(get_generation_input_validator),
+) -> SubmitGenerationRunUseCase:
+    base = settings.generation_webhook_public_base_url.rstrip('/')
+    prefix = settings.api_v1_prefix
+    if not prefix.startswith('/'):
+        prefix = f'/{prefix}'
+    webhook_url = f'{base}{prefix}/provider-webhooks/fal?token={settings.generation_webhook_token}'
+    return SubmitGenerationRunUseCase(
+        collection_item_repository=CollectionItemSqlRepository(session),
+        generation_run_repository=GenerationRunSqlRepository(session),
+        generation_provider=generation_provider,
+        capability_registry=capability_registry,
+        input_validator=input_validator,
+        webhook_url=webhook_url,
+    )
+
+
+def get_generate_shot_visuals_use_case(
+    session: Session = Depends(get_db_session),
+    ensure_shot_visual_collection_use_case: EnsureShotVisualCollectionUseCase = Depends(
+        get_ensure_shot_visual_collection_use_case
+    ),
+    craft_shot_image_prompt_use_case: CraftShotImagePromptUseCase = Depends(
+        get_craft_shot_image_prompt_use_case
+    ),
+    submit_generation_run_use_case: SubmitGenerationRunUseCase = Depends(
+        get_submit_generation_run_use_case
+    ),
+) -> GenerateShotVisualsUseCase:
+    return GenerateShotVisualsUseCase(
+        project_repository=ProjectSqlRepository(session),
+        screenplay_repository=ScreenplaySqlRepository(session),
+        shot_repository=ShotSqlRepository(session),
+        ensure_shot_visual_collection=ensure_shot_visual_collection_use_case,
+        craft_shot_image_prompt=craft_shot_image_prompt_use_case,
+        submit_generation_run=submit_generation_run_use_case,
     )
 
 
