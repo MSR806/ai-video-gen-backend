@@ -68,6 +68,49 @@ def test_rejects_gallery_media_group_with_non_uri_items() -> None:
         normalize_operation_schema(cast(JsonObject, schema))
 
 
+def test_rejects_non_list_media_groups() -> None:
+    schema = {
+        'type': 'object',
+        'x_ui_media_groups': {'group_key': 'inputs', 'layout': 'single', 'placement': 'top'},
+    }
+
+    with pytest.raises(CapabilityRegistryError, match='x_ui_media_groups must be a list'):
+        normalize_operation_schema(cast(JsonObject, schema))
+
+
+def test_rejects_media_group_with_invalid_placement() -> None:
+    schema = {
+        'type': 'object',
+        'x_ui_media_groups': [{'group_key': 'inputs', 'layout': 'single', 'placement': 'left'}],
+        'properties': {
+            'image_url': {
+                'type': 'string',
+                'format': 'uri',
+                'x_ui_media_group': 'inputs',
+            }
+        },
+    }
+
+    with pytest.raises(CapabilityRegistryError, match='placement must be one of'):
+        normalize_operation_schema(cast(JsonObject, schema))
+
+
+def test_rejects_media_name_without_media_group() -> None:
+    schema = {
+        'type': 'object',
+        'properties': {
+            'image_url': {
+                'type': 'string',
+                'format': 'uri',
+                'x_ui_media_name': 'Cover image',
+            }
+        },
+    }
+
+    with pytest.raises(CapabilityRegistryError, match='x_ui_media_name without x_ui_media_group'):
+        normalize_operation_schema(cast(JsonObject, schema))
+
+
 def test_accepts_valid_gallery_media_group() -> None:
     schema = {
         'type': 'object',
@@ -88,3 +131,63 @@ def test_accepts_valid_gallery_media_group() -> None:
     assert len(fields) == 1
     assert fields[0].media_group == 'gallery'
     assert groups[0].group_key == 'gallery'
+
+
+def test_rejects_duplicate_media_group_keys() -> None:
+    schema = {
+        'type': 'object',
+        'x_ui_media_groups': [
+            {'group_key': 'inputs', 'layout': 'single', 'placement': 'top'},
+            {'group_key': 'inputs', 'layout': 'sequence', 'placement': 'top'},
+        ],
+        'properties': {
+            'image_url': {
+                'type': 'string',
+                'format': 'uri',
+                'x_ui_media_group': 'inputs',
+            }
+        },
+    }
+
+    with pytest.raises(CapabilityRegistryError, match=r'Duplicate x_ui_media_groups\.group_key'):
+        normalize_operation_schema(cast(JsonObject, schema))
+
+
+def test_rejects_unknown_media_group_reference() -> None:
+    schema = {
+        'type': 'object',
+        'x_ui_media_groups': [{'group_key': 'known', 'layout': 'single', 'placement': 'top'}],
+        'properties': {
+            'image_url': {
+                'type': 'string',
+                'format': 'uri',
+                'x_ui_media_group': 'unknown',
+            }
+        },
+    }
+
+    with pytest.raises(CapabilityRegistryError, match='references unknown x_ui_media_group'):
+        normalize_operation_schema(cast(JsonObject, schema))
+
+
+def test_rejects_sequence_member_missing_order() -> None:
+    schema = {
+        'type': 'object',
+        'x_ui_media_groups': [{'group_key': 'inputs', 'layout': 'sequence', 'placement': 'top'}],
+        'properties': {
+            'first_image_url': {
+                'type': 'string',
+                'format': 'uri',
+                'x_ui_media_group': 'inputs',
+                'x_ui_media_order': 1,
+            },
+            'second_image_url': {
+                'type': 'string',
+                'format': 'uri',
+                'x_ui_media_group': 'inputs',
+            },
+        },
+    }
+
+    with pytest.raises(CapabilityRegistryError, match='must define x_ui_media_order'):
+        normalize_operation_schema(cast(JsonObject, schema))
