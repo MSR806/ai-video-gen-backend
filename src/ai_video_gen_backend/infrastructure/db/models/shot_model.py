@@ -16,6 +16,7 @@ class ShotModel(Base):
         sa.CheckConstraint('order_index > 0', name='ck_shots_order_index_positive'),
         sa.UniqueConstraint('scene_id', 'order_index', name='uq_shots_scene_order'),
         sa.Index('ix_shots_scene_id', 'scene_id'),
+        sa.Index('ix_shots_collection_id', 'collection_id'),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -23,6 +24,11 @@ class ShotModel(Base):
         Uuid,
         sa.ForeignKey('screenplay_scenes.id', ondelete='CASCADE'),
         nullable=False,
+    )
+    collection_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        sa.ForeignKey('collections.id', ondelete='SET NULL'),
+        nullable=True,
     )
     order_index: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)

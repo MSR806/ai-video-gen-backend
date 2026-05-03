@@ -194,6 +194,7 @@ class ShotSqlRepository:
         return Shot(
             id=model.id,
             scene_id=model.scene_id,
+            collection_id=model.collection_id,
             order_index=model.order_index,
             title=model.title,
             description=model.description,

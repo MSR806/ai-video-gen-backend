@@ -62,6 +62,7 @@ def test_shot_endpoints_happy_path(client: TestClient, db_session: Session) -> N
     )
     assert create_first_shot.status_code == 201
     first_shot_id = create_first_shot.json()['id']
+    assert create_first_shot.json()['collectionId'] is None
 
     create_second_shot = client.post(
         f'/api/v1/projects/{project_id}/screenplays/scenes/{first_scene_id}/shots',
@@ -83,6 +84,7 @@ def test_shot_endpoints_happy_path(client: TestClient, db_session: Session) -> N
     listed_shots = list_response.json()
     assert [shot['orderIndex'] for shot in listed_shots] == [1, 2]
     assert listed_shots[0]['title'] == 'Shot A'
+    assert listed_shots[0]['collectionId'] is None
 
     reorder_response = client.post(
         f'/api/v1/projects/{project_id}/screenplays/scenes/{first_scene_id}/shots/reorder',

@@ -13,9 +13,10 @@ from ai_video_gen_backend.application.project import (
     CreateProjectUseCase,
     GetAllProjectsUseCase,
     GetProjectByIdUseCase,
+    UpdateProjectUseCase,
 )
 from ai_video_gen_backend.domain.collection import CollectionCreationPayload
-from ai_video_gen_backend.domain.project import ProjectCreationPayload
+from ai_video_gen_backend.domain.project import ProjectCreationPayload, ProjectUpdatePayload
 from ai_video_gen_backend.infrastructure.repositories import (
     CollectionItemSqlRepository,
     CollectionSqlRepository,
@@ -28,6 +29,7 @@ from ai_video_gen_backend.presentation.api.v1.schemas import (
     CreateCollectionRequest,
     CreateProjectRequest,
     ProjectResponse,
+    UpdateProjectRequest,
 )
 
 router = APIRouter(tags=['projects'])
@@ -49,6 +51,8 @@ def create_project(
         ProjectCreationPayload(
             name=request.name,
             description=request.description,
+            style=request.style,
+            aspect_ratio=request.to_domain_aspect_ratio(),
             status=request.status,
         )
     )
@@ -59,6 +63,32 @@ def create_project(
 def get_project(project_id: UUID, session: Session = Depends(get_db_session)) -> ProjectResponse:
     use_case = GetProjectByIdUseCase(ProjectSqlRepository(session))
     project = use_case.execute(project_id)
+    if project is None:
+        raise ApiError(status_code=404, code='project_not_found', message='Project not found')
+    return ProjectResponse.from_domain(project)
+
+
+@router.patch('/projects/{project_id}', response_model=ProjectResponse)
+def update_project(
+    project_id: UUID,
+    request: UpdateProjectRequest,
+    session: Session = Depends(get_db_session),
+) -> ProjectResponse:
+    updated_fields = request.model_fields_set
+    use_case = UpdateProjectUseCase(ProjectSqlRepository(session))
+    project = use_case.execute(
+        project_id,
+        ProjectUpdatePayload(
+            name=request.name,
+            description=request.description,
+            style=request.style,
+            aspect_ratio=request.aspect_ratio,
+            update_name='name' in updated_fields,
+            update_description='description' in updated_fields,
+            update_style='style' in updated_fields,
+            update_aspect_ratio='aspect_ratio' in updated_fields,
+        ),
+    )
     if project is None:
         raise ApiError(status_code=404, code='project_not_found', message='Project not found')
     return ProjectResponse.from_domain(project)
