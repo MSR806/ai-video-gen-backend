@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session
 
 from ai_video_gen_backend.application.chat import SendChatMessageUseCase
 from ai_video_gen_backend.application.generation import GenerationInputValidator
-from ai_video_gen_backend.application.shot import GenerateShotsUseCase
+from ai_video_gen_backend.application.shot import (
+    EnsureShotVisualCollectionUseCase,
+    GenerateShotsUseCase,
+)
 from ai_video_gen_backend.config.settings import Settings, get_settings
 from ai_video_gen_backend.domain.chat import ChatModelPort, ChatWorkflowPort
 from ai_video_gen_backend.domain.collection_item import (
@@ -39,6 +42,7 @@ from ai_video_gen_backend.infrastructure.providers.langgraph_postgres_checkpoint
 )
 from ai_video_gen_backend.infrastructure.repositories import (
     ChatSqlRepository,
+    CollectionSqlRepository,
     ScreenplaySqlRepository,
     ShotSqlRepository,
 )
@@ -139,6 +143,16 @@ def get_generate_shots_use_case(
         shot_repository=ShotSqlRepository(session),
         screenplay_repository=ScreenplaySqlRepository(session),
         shot_generator=shot_generator,
+    )
+
+
+def get_ensure_shot_visual_collection_use_case(
+    session: Session = Depends(get_db_session),
+) -> EnsureShotVisualCollectionUseCase:
+    return EnsureShotVisualCollectionUseCase(
+        shot_repository=ShotSqlRepository(session),
+        screenplay_repository=ScreenplaySqlRepository(session),
+        collection_repository=CollectionSqlRepository(session),
     )
 
 

@@ -29,6 +29,12 @@ class FakeShotRepository:
     def list_shots(self, scene_id: UUID) -> list[Shot]:
         return [shot for shot in self._shots if shot.scene_id == scene_id]
 
+    def get_shot(self, scene_id: UUID, shot_id: UUID) -> Shot | None:
+        return next(
+            (shot for shot in self._shots if shot.scene_id == scene_id and shot.id == shot_id),
+            None,
+        )
+
     def create_shot(self, scene_id: UUID, payload: ShotCreateInput) -> Shot | None:
         order_index = len(self.list_shots(scene_id)) + 1
         shot = Shot(
@@ -74,6 +80,31 @@ class FakeShotRepository:
                 mood=payload.mood if payload.mood is not None else shot.mood,
                 created_at=shot.created_at,
                 updated_at=datetime.now(UTC),
+            )
+            self._shots[index] = updated
+            return updated
+
+        return None
+
+    def set_shot_collection(
+        self, scene_id: UUID, shot_id: UUID, collection_id: UUID
+    ) -> Shot | None:
+        for index, shot in enumerate(self._shots):
+            if shot.scene_id != scene_id or shot.id != shot_id:
+                continue
+
+            updated = Shot(
+                id=shot.id,
+                scene_id=shot.scene_id,
+                collection_id=collection_id,
+                order_index=shot.order_index,
+                title=shot.title,
+                description=shot.description,
+                camera_framing=shot.camera_framing,
+                camera_movement=shot.camera_movement,
+                mood=shot.mood,
+                created_at=shot.created_at,
+                updated_at=shot.updated_at,
             )
             self._shots[index] = updated
             return updated

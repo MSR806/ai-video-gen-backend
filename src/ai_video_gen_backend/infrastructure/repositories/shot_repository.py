@@ -24,6 +24,11 @@ class ShotSqlRepository:
         models = self._session.execute(stmt).scalars().all()
         return [self._to_domain(model) for model in models]
 
+    def get_shot(self, scene_id: UUID, shot_id: UUID) -> Shot | None:
+        stmt = select(ShotModel).where(ShotModel.id == shot_id, ShotModel.scene_id == scene_id)
+        model = self._session.execute(stmt).scalar_one_or_none()
+        return self._to_domain(model) if model is not None else None
+
     def create_shot(self, scene_id: UUID, payload: ShotCreateInput) -> Shot | None:
         try:
             if self._lock_scene(scene_id) is None:
@@ -66,6 +71,26 @@ class ShotSqlRepository:
             if payload.mood is not None:
                 model.mood = payload.mood
 
+            self._session.commit()
+            self._session.refresh(model)
+            return self._to_domain(model)
+        except Exception:
+            self._session.rollback()
+            raise
+
+    def set_shot_collection(
+        self, scene_id: UUID, shot_id: UUID, collection_id: UUID
+    ) -> Shot | None:
+        try:
+            stmt = select(ShotModel).where(ShotModel.id == shot_id, ShotModel.scene_id == scene_id)
+            model = self._session.execute(stmt).scalar_one_or_none()
+            if model is None:
+                return None
+
+            if model.collection_id is not None:
+                return self._to_domain(model)
+
+            model.collection_id = collection_id
             self._session.commit()
             self._session.refresh(model)
             return self._to_domain(model)

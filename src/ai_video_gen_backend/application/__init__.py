@@ -42,6 +42,7 @@ from .screenplay import (
 from .shot import (
     CreateShotUseCase,
     DeleteShotUseCase,
+    EnsureShotVisualCollectionUseCase,
     ListShotsUseCase,
     ReorderShotsUseCase,
     UpdateShotUseCase,
@@ -58,6 +59,7 @@ __all__ = [
     'DeleteCollectionItemUseCase',
     'DeleteScreenplaySceneUseCase',
     'DeleteShotUseCase',
+    'EnsureShotVisualCollectionUseCase',
     'GenerationFinalizationError',
     'GenerationFinalizer',
     'GenerationInputValidator',
