@@ -40,16 +40,21 @@ from .screenplay import (
     UpdateScreenplayTitleUseCase,
 )
 from .shot import (
+    CraftShotImagePromptUseCase,
     CreateShotUseCase,
     DeleteShotUseCase,
     EnsureShotVisualCollectionUseCase,
     ListShotsUseCase,
+    ProjectNotFoundError,
     ReorderShotsUseCase,
+    ScreenplaySceneNotFoundError,
+    ShotNotFoundError,
     UpdateShotUseCase,
 )
 
 __all__ = [
     'ChatThreadNotFoundError',
+    'CraftShotImagePromptUseCase',
     'CreateCollectionItemUseCase',
     'CreateCollectionUseCase',
     'CreateProjectUseCase',
@@ -78,11 +83,14 @@ __all__ = [
     'InvalidOutputCountError',
     'ListShotsUseCase',
     'PayloadTooLargeError',
+    'ProjectNotFoundError',
     'ReconcileGenerationRunUseCase',
     'ReorderScreenplayScenesUseCase',
     'ReorderShotsUseCase',
+    'ScreenplaySceneNotFoundError',
     'SendChatMessageUseCase',
     'SetCollectionItemFavoriteUseCase',
+    'ShotNotFoundError',
     'SubmitGenerationRunUseCase',
     'UnsupportedBatchOutputCountError',
     'UnsupportedMediaTypeError',

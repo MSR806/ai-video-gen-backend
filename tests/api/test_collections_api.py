@@ -22,7 +22,14 @@ from ai_video_gen_backend.domain.generation import (
     ProviderWebhookEvent,
     ResolvedGenerationOperation,
 )
+from ai_video_gen_backend.domain.shot import ShotImagePromptCraftResult
+from ai_video_gen_backend.infrastructure.db.models import (
+    ScreenplayModel,
+    ScreenplaySceneModel,
+    ShotModel,
+)
 from ai_video_gen_backend.presentation.api.dependencies import (
+    get_craft_shot_image_prompt_use_case,
     get_generation_capability_registry,
     get_generation_provider,
     get_media_downloader,
@@ -178,6 +185,12 @@ class FailingCapabilityRegistry:
     ) -> ResolvedGenerationOperation | None:
         del model_key, operation_key
         raise CapabilityRegistryError('registry unavailable')
+
+
+class FakeCraftShotImagePromptUseCase:
+    def execute(self, *, project_id: object, collection_id: object) -> ShotImagePromptCraftResult:
+        del project_id, collection_id
+        return ShotImagePromptCraftResult(prompt='crafted cinematic prompt')
 
 
 def _override_upload_dependencies(
@@ -849,6 +862,73 @@ def test_create_generation_run_returns_async_run(client: TestClient, db_session:
     ]
     assert len(generated_items) == 2
     assert all(item['status'] == 'GENERATING' for item in generated_items)
+
+
+def test_create_generation_run_crafts_missing_prompt_for_shot_collection(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    ids = seed_baseline_data(db_session)
+    screenplay_id = uuid4()
+    scene_id = uuid4()
+    db_session.add(
+        ScreenplayModel(id=screenplay_id, project_id=ids['project_id'], title='Seed screenplay')
+    )
+    db_session.add(
+        ScreenplaySceneModel(
+            id=scene_id,
+            screenplay_id=screenplay_id,
+            order_index=1,
+            content_xml='<scene><action>Night rain in neon alley.</action></scene>',
+        )
+    )
+    db_session.add(
+        ShotModel(
+            id=uuid4(),
+            scene_id=scene_id,
+            collection_id=ids['collection_id'],
+            order_index=1,
+            title='Hero reveal',
+            description='A detective steps into frame',
+            camera_framing='Medium close-up',
+            camera_movement='Dolly in',
+            mood='Tense',
+        )
+    )
+    db_session.commit()
+
+    fake_provider = FakeGenerationProvider()
+    app = _override_generation_dependency(client, fake_provider)
+    app.dependency_overrides[get_craft_shot_image_prompt_use_case] = lambda: (
+        FakeCraftShotImagePromptUseCase()
+    )
+
+    try:
+        response = client.post(
+            f'/api/v1/collections/{ids["collection_id"]}/generation-runs',
+            json={
+                'projectId': str(ids['project_id']),
+                'modelKey': 'nano_banana',
+                'operationKey': 'text_to_image',
+                'inputs': {'aspect_ratio': '16:9'},
+                'outputCount': 1,
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_generation_provider, None)
+        app.dependency_overrides.pop(get_craft_shot_image_prompt_use_case, None)
+
+    assert response.status_code == 202
+    assert fake_provider.submitted_inputs[-1][1]['prompt'] == 'crafted cinematic prompt'
+    items_response = client.get(f'/api/v1/collections/{ids["collection_id"]}/items')
+    assert items_response.status_code == 200
+    generated_item = next(
+        item
+        for item in items_response.json()['items']
+        if item.get('runId') == response.json()['runId']
+    )
+    assert generated_item['description'] == 'crafted cinematic prompt'
+    assert generated_item['metadata']['prompt'] == 'crafted cinematic prompt'
 
 
 def test_create_generation_run_with_duplicate_idempotency_key_returns_existing_run(

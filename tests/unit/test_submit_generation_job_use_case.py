@@ -477,6 +477,10 @@ def test_submit_generation_run_creates_outputs_and_placeholders() -> None:
         payload.description == 'a cinematic portrait'
         for payload in collection_repo.created_payloads
     )
+    assert all(
+        payload.metadata.get('prompt') == 'a cinematic portrait'
+        for payload in collection_repo.created_payloads
+    )
     assert run_repo.created_run is not None
     assert run_repo.created_run.requested_output_count == 2
     assert len(provider.submit_calls) == 1

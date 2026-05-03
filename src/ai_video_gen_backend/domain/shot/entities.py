@@ -41,3 +41,20 @@ class ShotUpdateInput:
 @dataclass(frozen=True, slots=True)
 class ShotReorderInput:
     shot_ids: list[UUID]
+
+
+@dataclass(frozen=True, slots=True)
+class ShotImagePromptCraftRequest:
+    project_name: str
+    project_style: str | None
+    shot_title: str
+    shot_description: str
+    camera_framing: str
+    camera_movement: str
+    mood: str
+    scene_context: str
+
+
+@dataclass(frozen=True, slots=True)
+class ShotImagePromptCraftResult:
+    prompt: str

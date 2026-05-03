@@ -162,6 +162,7 @@ class SubmitGenerationRunUseCase:
                         operation_key=request.operation_key,
                         media_type=resolved_operation.media_type,
                         output_index=output.output_index,
+                        prompt=self._item_description(request.inputs),
                     ),
                     generation_source='fal',
                     status='GENERATING',
@@ -242,11 +243,13 @@ class SubmitGenerationRunUseCase:
         operation_key: str,
         media_type: str,
         output_index: int,
+        prompt: str,
     ) -> JsonObject:
         default_format = 'mp4' if media_type == 'video' else 'png'
         return {
             'operationKey': operation_key,
             'modelKey': model_key,
+            'prompt': prompt,
             'thumbnailUrl': '',
             'width': 0,
             'height': 0,
