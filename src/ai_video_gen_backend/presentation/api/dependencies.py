@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ai_video_gen_backend.application.chat import SendChatMessageUseCase
 from ai_video_gen_backend.application.generation import GenerationInputValidator
 from ai_video_gen_backend.application.shot import (
+    CraftShotImagePromptUseCase,
     EnsureShotVisualCollectionUseCase,
     GenerateShotsUseCase,
 )
@@ -23,7 +24,7 @@ from ai_video_gen_backend.domain.generation import (
     GenerationProviderPort,
     MediaDownloaderPort,
 )
-from ai_video_gen_backend.domain.shot import ShotGenerationPort
+from ai_video_gen_backend.domain.shot import ShotGenerationPort, ShotImagePromptCrafterPort
 from ai_video_gen_backend.infrastructure.db.session import get_session_factory
 from ai_video_gen_backend.infrastructure.providers import (
     FalGenerationProvider,
@@ -31,6 +32,7 @@ from ai_video_gen_backend.infrastructure.providers import (
     LangGraphChatWorkflow,
     OpenAIChatModelProvider,
     OpenAIShotGenerationProvider,
+    OpenAIShotImagePromptCrafter,
 )
 from ai_video_gen_backend.infrastructure.providers.fal import (
     FalGenerationModelRegistry,
@@ -43,6 +45,7 @@ from ai_video_gen_backend.infrastructure.providers.langgraph_postgres_checkpoint
 from ai_video_gen_backend.infrastructure.repositories import (
     ChatSqlRepository,
     CollectionSqlRepository,
+    ProjectSqlRepository,
     ScreenplaySqlRepository,
     ShotSqlRepository,
 )
@@ -132,6 +135,29 @@ def get_shot_generation_provider(
         api_key=settings.portkey_api_key,
         base_url=settings.chat_provider_base_url,
         temperature=settings.chat_model_temperature,
+    )
+
+
+def get_shot_image_prompt_crafter(
+    settings: Settings = Depends(get_app_settings),
+) -> ShotImagePromptCrafterPort:
+    return OpenAIShotImagePromptCrafter(
+        model_name=settings.chat_model_name,
+        api_key=settings.portkey_api_key,
+        base_url=settings.chat_provider_base_url,
+        temperature=settings.chat_model_temperature,
+    )
+
+
+def get_craft_shot_image_prompt_use_case(
+    session: Session = Depends(get_db_session),
+    prompt_crafter: ShotImagePromptCrafterPort = Depends(get_shot_image_prompt_crafter),
+) -> CraftShotImagePromptUseCase:
+    return CraftShotImagePromptUseCase(
+        project_repository=ProjectSqlRepository(session),
+        screenplay_repository=ScreenplaySqlRepository(session),
+        shot_repository=ShotSqlRepository(session),
+        prompt_crafter=prompt_crafter,
     )
 
 

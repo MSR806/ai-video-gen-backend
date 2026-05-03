@@ -29,6 +29,11 @@ class ShotSqlRepository:
         model = self._session.execute(stmt).scalar_one_or_none()
         return self._to_domain(model) if model is not None else None
 
+    def get_shot_by_collection_id(self, collection_id: UUID) -> Shot | None:
+        stmt = select(ShotModel).where(ShotModel.collection_id == collection_id)
+        model = self._session.execute(stmt).scalar_one_or_none()
+        return self._to_domain(model) if model is not None else None
+
     def create_shot(self, scene_id: UUID, payload: ShotCreateInput) -> Shot | None:
         try:
             if self._lock_scene(scene_id) is None:

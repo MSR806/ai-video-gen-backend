@@ -24,6 +24,7 @@ from ai_video_gen_backend.application.generation import (
     GenerationInputValidator,
     SubmitGenerationRunUseCase,
 )
+from ai_video_gen_backend.application.shot import CraftShotImagePromptUseCase
 from ai_video_gen_backend.config.settings import Settings
 from ai_video_gen_backend.domain.collection_item import (
     CollectionItemCreationPayload,
@@ -43,6 +44,7 @@ from ai_video_gen_backend.infrastructure.repositories import (
 )
 from ai_video_gen_backend.presentation.api.dependencies import (
     get_app_settings,
+    get_craft_shot_image_prompt_use_case,
     get_db_session,
     get_generation_capability_registry,
     get_generation_input_validator,
@@ -313,6 +315,9 @@ def create_generation_run(
         get_generation_capability_registry
     ),
     input_validator: GenerationInputValidator = Depends(get_generation_input_validator),
+    craft_prompt_use_case: CraftShotImagePromptUseCase = Depends(
+        get_craft_shot_image_prompt_use_case
+    ),
 ) -> GenerationRunSubmitResponse:
     collection_use_case = GetCollectionByIdUseCase(CollectionSqlRepository(session))
     collection = collection_use_case.execute(collection_id)
@@ -334,13 +339,23 @@ def create_generation_run(
         input_validator=input_validator,
         webhook_url=_build_generation_webhook_url(settings),
     )
+    request_inputs = dict(request.inputs)
+    prompt_raw = request_inputs.get('prompt')
+    has_non_empty_prompt = isinstance(prompt_raw, str) and len(prompt_raw.strip()) > 0
+    if not has_non_empty_prompt:
+        crafted_prompt = craft_prompt_use_case.execute(
+            project_id=request.project_id,
+            collection_id=collection_id,
+        )
+        request_inputs['prompt'] = crafted_prompt.prompt
+
     submission = use_case.execute(
         GenerationRunRequest(
             project_id=request.project_id,
             collection_id=collection_id,
             model_key=request.model_key,
             operation_key=request.operation_key,
-            inputs=request.inputs,
+            inputs=request_inputs,
             output_count=request.output_count,
             idempotency_key=request.idempotency_key,
         )

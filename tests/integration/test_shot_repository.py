@@ -242,9 +242,15 @@ def test_shot_repository_maps_collection_id_when_present(db_session: Session) ->
     )
     db_session.commit()
 
-    shot = ShotSqlRepository(db_session).list_shots(scene_id)[0]
+    repository = ShotSqlRepository(db_session)
+    shot = repository.list_shots(scene_id)[0]
     assert shot.id == shot_id
     assert shot.collection_id == collection_id
+
+    shot_by_collection = repository.get_shot_by_collection_id(collection_id)
+    assert shot_by_collection is not None
+    assert shot_by_collection.id == shot_id
+    assert repository.get_shot_by_collection_id(uuid4()) is None
 
 
 def test_get_shot_is_scene_scoped(db_session: Session) -> None:

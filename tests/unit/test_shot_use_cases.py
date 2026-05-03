@@ -35,6 +35,9 @@ class FakeShotRepository:
             None,
         )
 
+    def get_shot_by_collection_id(self, collection_id: UUID) -> Shot | None:
+        return next((shot for shot in self._shots if shot.collection_id == collection_id), None)
+
     def create_shot(self, scene_id: UUID, payload: ShotCreateInput) -> Shot | None:
         order_index = len(self.list_shots(scene_id)) + 1
         shot = Shot(

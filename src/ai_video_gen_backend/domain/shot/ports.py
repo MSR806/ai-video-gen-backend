@@ -3,13 +3,21 @@ from __future__ import annotations
 from typing import Protocol
 from uuid import UUID
 
-from .entities import Shot, ShotCreateInput, ShotUpdateInput
+from .entities import (
+    Shot,
+    ShotCreateInput,
+    ShotImagePromptCraftRequest,
+    ShotImagePromptCraftResult,
+    ShotUpdateInput,
+)
 
 
 class ShotRepositoryPort(Protocol):
     def list_shots(self, scene_id: UUID) -> list[Shot]: ...
 
     def get_shot(self, scene_id: UUID, shot_id: UUID) -> Shot | None: ...
+
+    def get_shot_by_collection_id(self, collection_id: UUID) -> Shot | None: ...
 
     def create_shot(self, scene_id: UUID, payload: ShotCreateInput) -> Shot | None: ...
 
@@ -32,3 +40,10 @@ class ShotRepositoryPort(Protocol):
 
 class ShotGenerationPort(Protocol):
     def generate_shots(self, scene_content: str) -> list[ShotCreateInput]: ...
+
+
+class ShotImagePromptCrafterPort(Protocol):
+    def craft_prompt(
+        self,
+        request: ShotImagePromptCraftRequest,
+    ) -> ShotImagePromptCraftResult: ...
